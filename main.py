@@ -89,7 +89,7 @@ def model_selection(data,target):
 def model_testing(data,target, approach, models):
     st.set_option('deprecation.showPyplotGlobalUse', False)
     X= data[data.columns.drop(target)]
-    if approach == 'classifier':
+    if approach == 'classifier' and len(data[target].unique()) == 2 :
         y = pd.get_dummies(data[target],drop_first=True)
         models['AUC'] = None
         models['score'] = None
@@ -234,7 +234,11 @@ def save_model(model_name, trained_model, model_df, selected_features):
 st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
 
 # We choose the step (page) to work on
-st.session_state.step = st.sidebar.selectbox('Step:',['Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing'],0)  
+if "step" not in st.session_state:
+    st.session_state.step = 'Data Loading'
+    st.session_state.steps = ['Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
+st.session_state.step = st.sidebar.selectbox('Step:',st.session_state.steps, st.session_state.steps.index(st.session_state.step))
+
 #Data loading
 if st.session_state.step == 'Data Loading':
     uploaded_file = st.sidebar.file_uploader('Upload your csv here')
@@ -270,10 +274,10 @@ elif st.session_state.step == 'EDA and Feature Selection' and 'raw' in st.sessio
         st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
 elif st.session_state.step == 'Model Selection' and 'data' in st.session_state:
 # model recommendation   
-    if st.sidebar.button('Recomended models',type='primary'):
+    if st.sidebar.button('Recomended models'):
         st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
 # model testing
-    if st.sidebar.button('Test Models',type='primary'):
+    if st.sidebar.button('Test Models'):
         model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
     if "models" in st.session_state:
         if st.checkbox('Show recommended models', value=True):    
@@ -294,4 +298,7 @@ elif st.session_state.step == "Model Testing" and "models" in st.session_state:
         st.dataframe(st.session_state.my_models)
 else:
     st.write("Please perform previous steps before continuing")
+if st.sidebar.button('Next',type='primary'):
+    st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+    st.rerun()
 
