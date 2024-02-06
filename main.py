@@ -104,13 +104,13 @@ def model_testing(data,target, approach, models):
     for i in models.index:
         exec(models.loc[i,'import'])
         if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
-            scaler = eval(f'{models.loc[i,['scaler']][0].split('.')[-1].strip('()')}()')
+            scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].strip('()')}()")
             X_train_i = scaler.fit_transform(X_train)
             X_test_i = scaler.fit_transform(X_test)
         else:
             X_train_i, X_test_i = X_train, X_test
         start = time.time()
-        model = eval(f'{models.loc[i,['method']][0].split('.')[-1].strip('()')}().fit(X_train_i,y_train)')
+        model = eval(f"{models.loc[i,['method']][0].split('.')[-1].strip('()')}().fit(X_train_i,y_train)")
         models.loc[i,'training_time'] = time.time() - start
         if st.session_state.approach == 'classifier':
                 models.loc[i,'score'] = model.score(X_test_i, y_test)
