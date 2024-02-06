@@ -17,9 +17,18 @@ from pandas.api.types import is_numeric_dtype
 from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
+import inspect
 import json
 import time
+import os
 
+#Project creation
+def create_project(project_name):
+    os.mkdir('./projects/' + project_name)
+
+#Project loading
+def load_project(project_name):
+    pass
 # Data loading
 #@st.cache_data
 def data_loading():
@@ -32,7 +41,6 @@ def data_loading():
     return st.session_state.raw
         
 #EDA
-
 def eda(eda_feature):
     st.set_option('deprecation.showPyplotGlobalUse', False)
     fig = plt.figure()
@@ -76,7 +84,7 @@ def model_selection(data,target):
                 {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the 7 top models of sklearn to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
-                        recomended scaler if any for the model and dataset, and "import" the python script used to import the required final method.
+                        recomended scaler if any for the model and dataset, and "import" the python script used to import the required final method from the library.
                         ''' + '''The resulting JSON object should be in this format: [{"model":"string","method":"string","scaler": "string","import": "string"}].\n\n
                         The dataset:\n''' +
                         f'''{str(data.head(100))}\n\n
@@ -102,17 +110,18 @@ def model_testing(data,target, approach, models):
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
     fig = plt.figure()
     for i in models.index:
-        exec(models.loc[i,'import'])
-        if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
-            scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].strip('()')}()")
-            X_train_i = scaler.fit_transform(X_train)
-            X_test_i = scaler.fit_transform(X_test)
-        else:
-            X_train_i, X_test_i = X_train, X_test
-        start = time.time()
-        model = eval(f"{models.loc[i,['method']][0].split('.')[-1].strip('()')}().fit(X_train_i,y_train)")
-        models.loc[i,'training_time'] = time.time() - start
-        if st.session_state.approach == 'classifier':
+        try:
+            exec(models.loc[i,'import'])
+            if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
+                scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].strip('()')}()")
+                X_train_i = scaler.fit_transform(X_train)
+                X_test_i = scaler.fit_transform(X_test)
+            else:
+                X_train_i, X_test_i = X_train, X_test
+            start = time.time()
+            model = eval(f"{models.loc[i,['method']][0].split('.')[-1].strip('()')}().fit(X_train_i,y_train)")
+            models.loc[i,'training_time'] = time.time() - start
+            if st.session_state.approach == 'classifier':
                 models.loc[i,'score'] = model.score(X_test_i, y_test)
                 try:
                     models.loc[i,'AUC'] = roc_auc_score(y_test,model.predict_proba(X_test_i)[:, 1])
@@ -120,13 +129,12 @@ def model_testing(data,target, approach, models):
                     plt.plot(fpr, tpr, label=models.loc[i,'model'])
                 except:
                     pass
-        else:
+            else:
                 models.loc[i,'rmse'] = mean_squared_error(y_test,model.predict(X_test_i),squared=False)
                 models.loc[i,'r2_score'] = r2_score(y_test,model.predict(X_test_i))
                 models.loc[i,'explained_variance'] = explained_variance_score(y_test,model.predict(X_test_i))
-
-        #except:
-            #pass
+        except:
+            st.text(f"{models.loc[i,'model'][0]} could not be tested")
     if st.session_state.approach == 'classifier':
         plt.plot([0, 1], [0, 1],'r--')
         plt.xlim([0.0, 1.0])
@@ -140,18 +148,23 @@ def model_testing(data,target, approach, models):
 
 def grid_search(test_model, models, data, minutes, approach, scaler):
     i = models.index[models['model'] == test_model].to_list()[0]
+    test_model_df = models.loc[models['model'] == test_model,:]
     combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
+    exec(models.loc[i,'import'])
+    model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
+    hyperparams = str(inspect.signature(model.__init__))
+    hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')[1:]]
     st.write(str(combinations))
     response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
         {
         "role": "system",
-        "content": "For a certain machine learning model and a number of combinations. Create a parameter grid to perform a GridSearch wich approximately the given number of fits. Answer should consist only of the requested JSON object."
+        "content": "For a certain machine learning model and a number of fits. Create a parameter grid to perform a GridSearch wich approximately the given number of fits. Answer should consist only of the requested JSON object."
         },
         {
         "role": "user",
-        "content": "Create a GridSearch for a RandomForestClassifier model. This gridsearch MUST be around 30 combinations. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON. the product of the number of values in each property of the child object MUST be around or less than 30"
+        "content": "Create a GridSearch for a RandomForestClassifier model. This gridsearch MUST be around 30 fits. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON. the product of the number of values in each property of the child object MUST be around or less than 30"
         },
         {
         "role": "assistant",
@@ -159,10 +172,10 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
         },
         {
         "role": "user",
-        "content": f"Create a GridSearch for a {test_model} model. This gridsearch MUST be around {combinations} combinations. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON. the product of the number of values in each property of the child object MUST be around or less than {combinations}"
+        "content": f"Create a GridSearch for a {test_model} {approach} model. This gridsearch MUST be around {combinations} fits. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON."# The product of the number of values in each property of the child object MUST be around or less than {combinations}"
         }
         ],
-        temperature=0.8,
+        temperature=1.4,
         max_tokens=1770,    
         top_p=1,
         frequency_penalty=0,
@@ -170,19 +183,25 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
         )
     param_grid = eval(response.choices[0].message.content.split('grid":')[-1].strip('}'))
     st.write(param_grid)
+    param_grid2 = param_grid.copy()
+    for key in param_grid.keys():
+        if key not in hyperparams:
+            del param_grid2[key]
+    st.write(param_grid2)
     
     X= data[data.columns.drop(st.session_state.target)]
-    y = pd.get_dummies(data[st.session_state.target], drop_first=True, prefix=st.session_state.target)
+    if approach == 'Classifier':
+        y = pd.get_dummies(data[st.session_state.target], drop_first=True, prefix=st.session_state.target)
+    else:
+        y = data[st.session_state.target]
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
-    test_model_df = models.loc[models['model'] == test_model,:]
-    exec(models.loc[i,'import'])
     st.write(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
-    model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
+    st.text(hyperparams)
     test_model_df.loc[i,'scaler'] = scaler
     if scaler is not None:
         scaler = eval(scaler + '()')
         X = scaler.fit_transform(X)
-    grid_search = GridSearchCV(model, param_grid, cv=5)
+    grid_search = GridSearchCV(model, param_grid2, cv=5)
     start = time.time()
     grid_search.fit(X,y)
     st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
@@ -195,25 +214,27 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
 
     if st.session_state.approach == 'classifier':
         test_model_df.loc[i,'score'] = best_model.score(X_test, y_test)
-        try:
-            test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
-            fpr, tpr, thresholds = roc_curve(y_test, best_model.predict_proba(X_test)[:, 1])
-            fig = plt.figure()
-            plt.plot(fpr, tpr, label=models.loc[i,'model'])
-        except:
-            pass
     else:
         test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
         test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
         test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,best_model.predict(X_test))
-    test_model_df['trained_model'] = best_model
+    #test_model_df['trained_model'] = None
+    #test_model_df.loc[i,'trained_model'][0] = best_model
     st.dataframe(test_model_df)
-    plt.plot([0, 1], [0, 1],'r--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.title('Receiver operating characteristic')
-    plt.legend(loc="lower right")
-    st.pyplot(fig)
+    try:
+        test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
+        fpr, tpr, thresholds = roc_curve(y_test, best_model.predict_proba(X_test)[:, 1])
+        fig = plt.figure()
+        plt.plot(fpr, tpr, label=models.loc[i,'model'])
+        plt.plot([0, 1], [0, 1],'r--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.title('Receiver operating characteristic')
+        plt.legend(loc="lower right")
+        st.pyplot(fig)
+    except:
+        pass
+    
 
     return best_model, test_model_df
 #
@@ -235,12 +256,34 @@ st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=N
 
 # We choose the step (page) to work on
 if "step" not in st.session_state:
-    st.session_state.step = 'Data Loading'
-    st.session_state.steps = ['Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
+    st.session_state.step = 'Projects'
+    st.session_state.steps = ['Projects', 'Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
 st.session_state.step = st.sidebar.selectbox('Step:',st.session_state.steps, st.session_state.steps.index(st.session_state.step))
 
+#Project Management
+if st.session_state.step == 'Projects':
+    status = st.selectbox('Create or Load', ['Create', 'Load'], 0)
+    if status == 'Create':
+        st.session_state.project = st.text_input('Porject Name').replace(' ','_')
+        if st.button('Create', type='primary'):
+            try:
+                create_project(st.session_state.project)
+            except:
+                st.text("Could not create the project. Project name already exists or contains invalid characters")
+    if status == 'Load':
+        st.session_state.project = st.selectbox('Select Project', os.listdir('./projects/'))
+        if st.button('Load'):
+            load_project(st.session_state.project)
+    
+
+
+
+
+
+
+
 #Data loading
-if st.session_state.step == 'Data Loading':
+if st.session_state.step == 'Data Loading' and "project" in st.session_state:
     uploaded_file = st.sidebar.file_uploader('Upload your csv here')
     separator = st.sidebar.text_input('Separator',placeholder=',')
     if uploaded_file is not None:
@@ -277,8 +320,9 @@ elif st.session_state.step == 'Model Selection' and 'data' in st.session_state:
     if st.sidebar.button('Recomended models'):
         st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
 # model testing
-    if st.sidebar.button('Test Models'):
-        model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
+    if "models" in st.session_state:
+        if st.sidebar.button('Test Models'):
+            model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
     if "models" in st.session_state:
         if st.checkbox('Show recommended models', value=True):    
             st.dataframe(st.session_state.models)
