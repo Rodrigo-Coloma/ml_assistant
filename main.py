@@ -62,10 +62,14 @@ def filter_tarnsform(df,selected_features,target):
 #Model selection prompt
 #@st.cache_data
 def model_selection(data,target):
-    api_key = dotenv_values('./.env')['GPTAPIKEY']
-    client = OpenAI(api_key=api_key)
+    
+    try:
+        st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
+    except:
+        st.session_state.api_key = GPTAPIKEY
+    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
 
-    completion = client.chat.completions.create(
+    completion = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         temperature= 0.3,
         messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
@@ -135,12 +139,10 @@ def model_testing(data,target, approach, models):
         st.pyplot()
 
 def grid_search(test_model, models, data, minutes, approach, scaler):
-    api_key = dotenv_values('./.env')['GPTAPIKEY']
-    client = OpenAI(api_key=api_key)
     i = models.index[models['model'] == test_model].to_list()[0]
     combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
     st.write(str(combinations))
-    response = client.chat.completions.create(
+    response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
         {
