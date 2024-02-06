@@ -66,7 +66,7 @@ def model_selection(data,target):
     try:
         st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
     except:
-        st.session_state.api_key = GPTAPIKEY
+        st.session_state.api_key = st.secrets["GPTAPIKEY"]
     st.session_state.client = OpenAI(api_key=st.session_state.api_key)
 
     completion = st.session_state.client.chat.completions.create(
