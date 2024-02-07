@@ -17,18 +17,77 @@ from pandas.api.types import is_numeric_dtype
 from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pyodbc
 import inspect
 import json
 import time
 import os
 
+# Azure connection
+def azure_connection():
+    try:
+        PASSWORD = dotenv_values('./.env')['AZUREPWD']
+    except:
+        PASSWORD = st.session_state.api_key = st.secrets["AZUREPWD"]
+    SERVER = 'sqlrjcg123.database.windows.net'
+    DATABASE = 'Database'
+    USERNAME = 'azureuser'
+    connectionString = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};Trusted_connection=no'
+    connection = pyodbc.connect(connectionString)
+    st.session_state.cursor = connection.cursor()
+    #cursor.execute('''CREATE SCHEMA mlassistant
+                   #;''')
+    #cursor.execute('''if not exists (select * from sysobjects where name='Users' and xtype='U')
+    #               CREATE TABLE mlassistant.Users (
+    #               Username varchar(50) NOT NULL PRIMARY KEY,
+    #               Password varchar(50) NOT NULL,
+    #               Registration_Date date NOT NULL)
+    #               ;''')
+    return connection
+
+def user_create(username,password):
+    try:
+        st.session_state.cursor.execute(f"INSERT INTO mlassistant.users(Username, Password, Registration_Date) VALUES ('{username}','{password}',CURRENT_TIMESTAMP);")
+        st.session_state.connection.commit()
+        st.session_state.username = username
+        st.write('User succesfully created!!')
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
+        time.sleep(2.5)
+        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+        st.rerun()
+    except:
+        st.write('Username already exists or contains invalid characters, please choose a new one')
+
+def user_login(username,password):
+    if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
+        st.session_state.username = username
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
+        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+        st.rerun()
+
+
+
+
 #Project creation
 def create_project(project_name):
-    os.mkdir('./projects/' + project_name)
+    #try:
+        st.session_state.cursor.execute(f"INSERT INTO mlassistant.projects(ProjectName, Owner,  CreatedAt, LastOpened) VALUES ('{project_name}','{st.session_state.username}', CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);")
+        st.session_state.connection.commit()
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
+        st.session_state.project = project_name
+        st.write('Project succesfully created!!')
+        time.sleep(2.5)
+        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+        st.rerun()
+    #except:
+        st.write('Project name already exists or contains invalid characters, please choose a new one')
 
 #Project loading
 def load_project(project_name):
-    pass
+    st.session_state.cursor.execute(f"UPDATE mlassistant.projects set LastOpened = CURRENT_TIMESTAMP WHERE ProjectName = '{project_name}';")
+    st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
+    st.session_state.connection.commit()
+    
 # Data loading
 #@st.cache_data
 def data_loading():
@@ -254,68 +313,97 @@ def save_model(model_name, trained_model, model_df, selected_features):
 
 st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
 
+
+# Create the connection with the database
+if "connetion" not in st.session_state:    
+    st.session_state.connection = azure_connection()
+
 # We choose the step (page) to work on
 if "step" not in st.session_state:
-    st.session_state.step = 'Projects'
-    st.session_state.steps = ['Projects', 'Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
-st.session_state.step = st.sidebar.selectbox('Step:',st.session_state.steps, st.session_state.steps.index(st.session_state.step))
+    st.session_state.step = 'User Login'
+    st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
+st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.steps, st.session_state.steps.index(st.session_state.step))
+#We create tabs to navigate through the steps
+#tabs = st.tabs(['Projects', 'Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing'])
 
 #Project Management
-if st.session_state.step == 'Projects':
-    status = st.selectbox('Create or Load', ['Create', 'Load'], 0)
-    if status == 'Create':
-        st.session_state.project = st.text_input('Porject Name').replace(' ','_')
-        if st.button('Create', type='primary'):
-            try:
-                create_project(st.session_state.project)
-            except:
-                st.text("Could not create the project. Project name already exists or contains invalid characters")
-    if status == 'Load':
-        st.session_state.project = st.selectbox('Select Project', os.listdir('./projects/'))
-        if st.button('Load'):
-            load_project(st.session_state.project)
+#if st.session_state.step == 'Projects':
+#with tabs[0]:
+ #   st.session_state.step = 'Projects'
+#with tabs[1]:
+#    st.session_state.step = 'Data Loading'
+#with tabs[2]:
+#   st.session_state.step = 'EDA and Feature Selection'
+if st.session_state.step == 'User Login':
+    st.session_state.users_df = pd.read_sql("SELECT * FROM mlassistant.users", st.session_state.connection)
+    st.dataframe(st.session_state.users_df)
+    username = st.text_input('Username: ',placeholder='Your Username')
+    password = st.text_input('Password: ',placeholder='Your Password',type='password')
+    if st.button('Login',type='primary'):
+        user_login(username,password)
+    if st.button('Create'):
+        user_create(username,password)
+
     
 
 
 
-
-
-
-
-#Data loading
-if st.session_state.step == 'Data Loading' and "project" in st.session_state:
-    uploaded_file = st.sidebar.file_uploader('Upload your csv here')
-    separator = st.sidebar.text_input('Separator',placeholder=',')
-    if uploaded_file is not None:
-        st.session_state.raw = data_loading()
-    # Choosing target and approach
-    if "raw" in st.session_state:
-        st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns, placeholder="Choose the target")
-        st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'], placeholder="Choose the target")
-        st.dataframe(st.session_state.raw)
-        st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
-                                "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
+# Project Management
+if st.session_state.step == 'Projects':
+    if "username" not in st.session_state:
+        st.write('Please login to be able to manage your projects')
     else:
-        st.markdown('#### Load a file to work on')
+        st.dataframe(st.session_state.projects_df)
+        status = st.selectbox('Create or Load', ['Create', 'Load'], 0)
+        if status == 'Create':
+            st.session_state.project = st.text_input('Porject Name').replace(' ','_')
+            if st.button('Create', type='primary'):
+                create_project(st.session_state.project)
+        if status == 'Load':
+            st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
+            if st.button('Load'):
+                load_project(st.session_state.project)
+    
+#Data loading
+if st.session_state.step == 'Data Loading':
+    if "project" not in st.session_state:
+        st.write('Before continuing, please create or load a project')
+    else:
+        uploaded_file = st.sidebar.file_uploader('Upload your csv here')
+        separator = st.sidebar.text_input('Separator',placeholder=',')
+        if uploaded_file is not None:
+            st.session_state.raw = data_loading()
+        # Choosing target and approach
+        if "raw" in st.session_state:
+            st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns, placeholder="Choose the target")
+            st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'], placeholder="Choose the target")
+            st.dataframe(st.session_state.raw)
+            st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
+                                "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
+        else:
+            st.markdown('#### Load a file to work on')
 # EDA
-elif st.session_state.step == 'EDA and Feature Selection' and 'raw' in st.session_state:   
-    st.session_state.features = list(st.session_state.raw.columns)
-    st.session_state.features.remove(st.session_state.target)
-    eda_feature = st.sidebar.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
-    eda(eda_feature)
-    st.session_state.show_table = st.checkbox('Show table', value=True)
-    if st.session_state.show_table:
-        st.dataframe(st.session_state.raw)
-        st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
+if st.session_state.step == 'EDA and Feature Selection':
+    if "raw" not in st.session_state:
+        st.write('Before continuing, please load a dataset to work on')
+    else:
+        st.session_state.features = list(st.session_state.raw.columns)
+        st.session_state.features.remove(st.session_state.target)
+        eda_feature = st.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
+        eda(eda_feature)
+        st.session_state.show_table = st.checkbox('Show table', value=True)
+        if st.session_state.show_table:
+            st.dataframe(st.session_state.raw)
+            st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
 # Feature selection
-    st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features)
-    if st.sidebar.button('Filter and transform'):
-        st.session_state.data = filter_tarnsform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
-    if "data" in st.session_state:
-        st.dataframe(st.session_state.data)
-        st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
-elif st.session_state.step == 'Model Selection' and 'data' in st.session_state:
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features)
+        if st.sidebar.button('Filter and transform'):
+            st.session_state.data = filter_tarnsform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
+        if "data" in st.session_state:
+            st.dataframe(st.session_state.data)
+            st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
+if st.session_state.step == 'Model Selection' and 'data' in st.session_state:
 # model recommendation   
     if st.sidebar.button('Recomended models'):
         st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
@@ -327,7 +415,7 @@ elif st.session_state.step == 'Model Selection' and 'data' in st.session_state:
         if st.checkbox('Show recommended models', value=True):    
             st.dataframe(st.session_state.models)
 # Gridsearch
-elif st.session_state.step == "Model Testing" and "models" in st.session_state:
+if st.session_state.step == "Model Testing" and "models" in st.session_state:
     test_model = st.sidebar.selectbox(' Test Model ', st.session_state.models['model'], placeholder="Choose the model")
     i = st.session_state.models.index[st.session_state.models['model'] == test_model].to_list()[0]
     scaler = st.sidebar.selectbox("Scaler",[None,"StandardScaler","RobustScaler","MinMaxScaler"])
@@ -340,9 +428,15 @@ elif st.session_state.step == "Model Testing" and "models" in st.session_state:
             save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features)
     if st.checkbox('My models') and "my_models" in st.session_state:
         st.dataframe(st.session_state.my_models)
+    if st.checkbox('Show recommended models', value=True):    
+        st.dataframe(st.session_state.models)
 else:
     st.write("Please perform previous steps before continuing")
 if st.sidebar.button('Next',type='primary'):
     st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
     st.rerun()
 
+if "project" in st.session_state:
+    st.sidebar.write(f'Working on:  {st.session_state.project}')
+if "username" in st.session_state:
+    st.sidebar.write(f'Logged as:  {st.session_state.username}')
