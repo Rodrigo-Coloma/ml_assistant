@@ -138,7 +138,7 @@ def model_selection(data,target):
 
     completion = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
-        temperature= 0.3,
+        temperature= 0.6,
         messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                 {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the 7 top models of sklearn to create a {st.session_state.approach} for {target}.
@@ -148,7 +148,6 @@ def model_selection(data,target):
                         The dataset:\n''' +
                         f'''{str(data.head(100))}\n\n
                         The JSON object:\n\n'''}])
-    
     return pd.DataFrame(json.loads(completion.choices[0].message.content))
 
 #Running every recommended model
@@ -172,13 +171,13 @@ def model_testing(data,target, approach, models):
         try:
             exec(models.loc[i,'import'])
             if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
-                scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].strip('()')}()")
+                scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].split(' ')[-1].strip('()')}()")
                 X_train_i = scaler.fit_transform(X_train)
                 X_test_i = scaler.fit_transform(X_test)
             else:
                 X_train_i, X_test_i = X_train, X_test
             start = time.time()
-            model = eval(f"{models.loc[i,['method']][0].split('.')[-1].strip('()')}().fit(X_train_i,y_train)")
+            model = eval(f"{models.loc[i,['method']][0].split('.')[-1].split(' ')[-1].strip('()')}().fit(X_train_i,y_train)")
             models.loc[i,'training_time'] = time.time() - start
             if st.session_state.approach == 'classifier':
                 models.loc[i,'score'] = model.score(X_test_i, y_test)
@@ -193,7 +192,7 @@ def model_testing(data,target, approach, models):
                 models.loc[i,'r2_score'] = r2_score(y_test,model.predict(X_test_i))
                 models.loc[i,'explained_variance'] = explained_variance_score(y_test,model.predict(X_test_i))
         except:
-            st.text(f"{models.loc[i,'model'][0]} could not be tested")
+            st.text(f"{models.loc[i,'model']} could not be tested")
     if st.session_state.approach == 'classifier':
         plt.plot([0, 1], [0, 1],'r--')
         plt.xlim([0.0, 1.0])
