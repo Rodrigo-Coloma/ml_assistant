@@ -32,7 +32,7 @@ def azure_connection():
     SERVER = 'sqlrjcg123.database.windows.net'
     DATABASE = 'Database'
     USERNAME = 'azureuser'
-    connectionString = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};Trusted_connection=no'
+    connectionString = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};Trusted_connection=no'
     connection = pyodbc.connect(connectionString)
     st.session_state.cursor = connection.cursor()
     #cursor.execute('''CREATE SCHEMA mlassistant
