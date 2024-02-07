@@ -234,7 +234,7 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
         "content": f"Create a GridSearch for a {test_model} {approach} model. This gridsearch MUST be around {combinations} fits. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON."# The product of the number of values in each property of the child object MUST be around or less than {combinations}"
         }
         ],
-        temperature=1.4,
+        temperature=0.6,
         max_tokens=1770,    
         top_p=1,
         frequency_penalty=0,
@@ -336,7 +336,8 @@ st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.ste
 #   st.session_state.step = 'EDA and Feature Selection'
 if st.session_state.step == 'User Login':
     st.session_state.users_df = pd.read_sql("SELECT * FROM mlassistant.users", st.session_state.connection)
-    st.dataframe(st.session_state.users_df)
+    if "username" in st.session_state and st.session_state.username == 'admin':
+        st.dataframe(st.session_state.users_df)
     username = st.text_input('Username: ',placeholder='Your Username')
     password = st.text_input('Password: ',placeholder='Your Password',type='password')
     if st.button('Login',type='primary'):
@@ -363,6 +364,8 @@ if st.session_state.step == 'Projects':
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
             if st.button('Load'):
                 load_project(st.session_state.project)
+                st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+                st.rerun()
     
 #Data loading
 if st.session_state.step == 'Data Loading':
