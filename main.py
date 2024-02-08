@@ -117,7 +117,9 @@ def load_project(project_name,user):
     except:
         try:
             st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv')
+            st.write('data saved to file')
             st.session_state.step = 'EDA and Feature Selection'
+            return st.session_state.raw
         except:
             st.session_state.step = 'Data Loading' 
     
@@ -468,7 +470,6 @@ if st.session_state.step == 'Projects':
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
             if st.button('Load'):
                 load_project(st.session_state.project, st.session_state.username)
-                st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
                 st.rerun()
     
 #Data loading
