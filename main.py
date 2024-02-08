@@ -104,7 +104,7 @@ def load_project(project_name,user):
                                                 F1 AS f1,
                                                 TrainingTime AS training_time,
                                                 Features AS features,
-                                                Hyperparamenters AS hyperparameters,
+                                                Hyperparameters AS hyperparameters,
                                                 Approach AS approach,
                                                 Project AS project,
                                                 pr.CreatedAt AS created_at
