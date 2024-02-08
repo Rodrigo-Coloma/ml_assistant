@@ -25,6 +25,7 @@ import time
 import os
 
 # Azure connection
+@st.cache_resource
 def azure_connection():
     try:
         PASSWORD = dotenv_values('./.env')['AZUREPWD']
@@ -72,11 +73,15 @@ def user_login(username,password):
 #Project creation
 def create_project(project_name,user):
     #try:
-        st.session_state.cursor.execute(f"INSERT INTO mlassistant.projects(ProjectName, Owner,  CreatedAt, LastOpened) VALUES ('{project_name}','{st.session_state.username}', CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);")
+        st.session_state.cursor.execute('''INSERT INTO mlassistant.projects(ProjectName, Owner, Target, Approach, CreatedAt, LastOpened)
+                                         VALUES ('{project_name}','{st.session_state.username}', NULL, NULL, CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);''')
         st.session_state.connection.commit()
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
         st.session_state.project = project_name
-        os.mkdir(f'./users/{user}/{project_name}')
+        try:
+            os.mkdir(f'./users/{user}/{project_name}')
+        except:
+            st.write('Directory existed')
         st.write('Project succesfully created!!')
         time.sleep(1.5)
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
@@ -117,12 +122,19 @@ def load_project(project_name,user):
     except:
         try:
             st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv')
-            st.write('data loaded from file')  
-            st.session_state.step = 'EDA and Feature Selection'
+            try:
+                st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv') 
+                try:
+                    st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended_models.csv') 
+                    st.session_state.step = 'Model Testing'
+                except:
+                    st.session_state.step = 'Model Selection'
+            except:
+                st.session_state.step = 'EDA and Feature Selection'
             return st.session_state.raw
         except:
             st.session_state.step = 'Data Loading' 
-    
+    st.rerun()
         
     
 # Data loading
@@ -135,7 +147,6 @@ def data_loading():
     if st.session_state.raw.columns[0] == 'Unnamed: 0':
         st.session_state.raw = st.session_state.raw.iloc[:,1:]
     st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
-    st.write('data loaded from file')
     return st.session_state.raw
         
 #EDA
@@ -162,6 +173,9 @@ def filter_transform(df,selected_features,target):
         dummies_df = pd.get_dummies(st.session_state.data[feature], prefix=feature, drop_first=True)
         st.session_state.data = pd.concat([st.session_state.data, dummies_df],axis=1).drop(feature, axis=1)   
     st.session_state.data = pd.concat([st.session_state.data.select_dtypes(exclude=['object']),df[target]], axis=1).dropna()
+    st.session_state.data.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/data.csv')
+    st.session_state.step = 'Model Selection'
+    st.rerun()
     return st.session_state.data
 
 
@@ -172,7 +186,7 @@ def model_selection(data,target):
     try:
         st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
     except:
-        st.session_state.api_key = st.secrets["GPTAPIKEY"]
+        st.session_state.api_key = st.secrets['GPTAPIKEY']
     st.session_state.client = OpenAI(api_key=st.session_state.api_key)
 
     completion = st.session_state.client.chat.completions.create(
@@ -250,6 +264,9 @@ def model_testing(data,target, approach, models):
     else:
         sns.scatterplot(data=st.session_state.models,y='rmse',x='r2_score')
         st.pyplot()
+    models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recomended.csv')
+    st.session_state.step = 'Model Selection'
+    st.rerun()
 
 def grid_search(test_model, models, data, minutes, approach, scaler):
     i = models.index[models['model'] == test_model].to_list()[0]
@@ -363,7 +380,7 @@ def save_model(model_name, trained_model, model_df, selected_features):
     buffer = StringIO()
     model_df.info(buf=buffer)
     s = buffer.getvalue()
-    model_df.fillna('NULL',inplace=True)
+    upload_df = model_df.fillna('NULL')
     st.session_state.cursor.execute(f'''INSERT INTO mlassistant.tested_models(
                                                 ModelName,
                                                 Approach,
@@ -383,35 +400,38 @@ def save_model(model_name, trained_model, model_df, selected_features):
                                                 Hyperparameters,
                                                 Project,
                                                 CreatedAt)
-                                    VALUES('{model_df.loc[0,'model']}',
+                                    VALUES('{upload_df.loc[0,'model']}',
                                                 '{st.session_state.approach}',
-                                                '{model_df.loc[0,'method']}',
-                                                '{model_df.loc[0,'scaler']}',
-                                                '{model_df.loc[0,'dimensionality_reduction']}',
-                                                {model_df.loc[0,'rmse']},
-                                                {model_df.loc[0,'r2_score']},
-                                                {model_df.loc[0,'explained_variance']},
-                                                {model_df.loc[0,'AUC']},
-                                                {model_df.loc[0,'accuracy']},
-                                                {model_df.loc[0,'recall']},
-                                                {model_df.loc[0,'precision']},
-                                                {model_df.loc[0,'f1']},
-                                                {model_df.loc[0,'training_time']},
-                                                '{str(model_df.loc[0,'features']).replace("'",'"')}',
-                                                '{str(model_df.loc[0,'hyperparameters']).replace("'",'"')}',
+                                                '{upload_df.loc[0,'method']}',
+                                                '{upload_df.loc[0,'scaler']}',
+                                                '{upload_df.loc[0,'dimensionality_reduction']}',
+                                                {upload_df.loc[0,'rmse']},
+                                                {upload_df.loc[0,'r2_score']},
+                                                {upload_df.loc[0,'explained_variance']},
+                                                {upload_df.loc[0,'AUC']},
+                                                {upload_df.loc[0,'accuracy']},
+                                                {upload_df.loc[0,'recall']},
+                                                {upload_df.loc[0,'precision']},
+                                                {upload_df.loc[0,'f1']},
+                                                {upload_df.loc[0,'training_time']},
+                                                '{str(upload_df.loc[0,'features']).replace("'",'"')}',
+                                                '{str(upload_df.loc[0,'hyperparameters']).replace("'",'"')}',
                                                 '{st.session_state.project}',
                                                 CURRENT_TIMESTAMP);''')
     st.session_state.connection.commit()
-    
-
-
-
-
-
     if "my_models" not in st.session_state:
         st.session_state.my_models = model_df
     else:
         st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
+    
+def update_project():
+    st.session_state.cursor.execute(f'''UPDATE mlassistant.projects
+                                    SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
+                                    WHERE ProjectName = '{st.session_state.project}';''')
+    st.session_state.connection.commit()
+
+
+
 
 #def plot_results(my_models,approach)
 
@@ -433,14 +453,7 @@ st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.ste
 #We create tabs to navigate through the steps
 #tabs = st.tabs(['Projects', 'Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing'])
 
-#Project Management
-#if st.session_state.step == 'Projects':
-#with tabs[0]:
- #   st.session_state.step = 'Projects'
-#with tabs[1]:
-#    st.session_state.step = 'Data Loading'
-#with tabs[2]:
-#   st.session_state.step = 'EDA and Feature Selection'
+#User Management
 if st.session_state.step == 'User Login':
     st.session_state.users_df = pd.read_sql("SELECT * FROM mlassistant.users", st.session_state.connection)
     if "username" in st.session_state and st.session_state.username == 'admin':
@@ -471,7 +484,6 @@ if st.session_state.step == 'Projects':
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
             if st.button('Load'):
                 load_project(st.session_state.project, st.session_state.username)
-                st.rerun()
     
 #Data loading
 if st.session_state.step == 'Data Loading':
@@ -481,7 +493,6 @@ if st.session_state.step == 'Data Loading':
         uploaded_file = st.sidebar.file_uploader('Upload your csv here')
         separator = st.sidebar.text_input('Separator',placeholder=',')
         if uploaded_file is not None:
-            if st.sidebar.button('Load', type='primary'):
                 st.session_state.raw = data_loading()
         # Choosing target and approach
         if "raw" in st.session_state:
@@ -490,6 +501,10 @@ if st.session_state.step == 'Data Loading':
             st.dataframe(st.session_state.raw)
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
+            if st.sidebar.button('Next',type='primary'):
+                update_project()
+                st.session_state.step = 'EDA and Feature Selection'
+                st.rerun()        
         else:
             st.markdown('#### Load a file to work on')
 # EDA
@@ -508,22 +523,26 @@ if st.session_state.step == 'EDA and Feature Selection':
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
 # Feature selection
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features)
-        if st.sidebar.button('Filter and transform'):
+        if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
         if "data" in st.session_state:
             st.dataframe(st.session_state.data)
             st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
-if st.session_state.step == 'Model Selection' and 'data' in st.session_state:
+
 # model recommendation   
-    if st.sidebar.button('Recomended models'):
-        st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
+if st.session_state.step == 'Model Selection':
+    if 'data' not in st.session_state:
+        st.write('Before continuing, please select features and filter data.')
+    else:
+        if st.sidebar.button('Recomended models'):
+            st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
 # model testing
-    if "models" in st.session_state:
-        if st.sidebar.button('Test Models'):
-            model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
-    if "models" in st.session_state:
-        if st.checkbox('Show recommended models', value=True):    
-            st.dataframe(st.session_state.models)
+        if "models" in st.session_state:
+            if st.sidebar.button('Test Models'):
+                model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
+        if "models" in st.session_state:
+            if st.checkbox('Show recommended models', value=True):    
+                st.dataframe(st.session_state.models)
 # Gridsearch
 if st.session_state.step == "Model Testing" and "models" in st.session_state:
     test_model = st.sidebar.selectbox(' Test Model ', st.session_state.models['model'], placeholder="Choose the model")
@@ -540,11 +559,6 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         st.dataframe(st.session_state.my_models)
     if st.checkbox('Show recommended models', value=True):    
         st.dataframe(st.session_state.models)
-else:
-    st.write("Please perform previous steps before continuing")
-if st.sidebar.button('Next',type='primary'):
-    st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
-    st.rerun()
 
 if "project" in st.session_state:
     st.sidebar.write(f'Working on:  {st.session_state.project}')
