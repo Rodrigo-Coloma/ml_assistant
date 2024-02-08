@@ -62,6 +62,8 @@ def user_login(username,password):
     if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
         st.session_state.username = username
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
+        if username not in os.listdir('./'):
+            os.mkdir(f'./users/{username}')
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
 
@@ -69,21 +71,22 @@ def user_login(username,password):
 
 
 #Project creation
-def create_project(project_name):
+def create_project(project_name,user):
     #try:
         st.session_state.cursor.execute(f"INSERT INTO mlassistant.projects(ProjectName, Owner,  CreatedAt, LastOpened) VALUES ('{project_name}','{st.session_state.username}', CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);")
         st.session_state.connection.commit()
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
         st.session_state.project = project_name
+        os.mkdir(f'./users/{user}/{project_name}')
         st.write('Project succesfully created!!')
-        time.sleep(2.5)
+        time.sleep(1.5)
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
     #except:
         st.write('Project name already exists or contains invalid characters, please choose a new one')
 
 #Project loading
-def load_project(project_name):
+def load_project(project_name,user):
     st.session_state.cursor.execute(f"UPDATE mlassistant.projects set LastOpened = CURRENT_TIMESTAMP WHERE ProjectName = '{project_name}';")
     st.session_state.connection.commit()
     st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
@@ -110,6 +113,14 @@ def load_project(project_name):
                                              WHERE pr.Owner = '{st.session_state.username}'
                                                 AND tm.Project = '{project_name}';''',
                                             st.session_state.connection)
+    try:
+        os.mkdir(f'./users/{user}/{project_name}')
+    except:
+        try:
+            st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv')
+            st.session_state.step = 'EDA and Feature Selection'
+        except:
+            st.session_state.step = 'Data Loading' 
     
         
     
@@ -452,11 +463,11 @@ if st.session_state.step == 'Projects':
         if status == 'Create':
             st.session_state.project = st.text_input('Porject Name').replace(' ','_')
             if st.button('Create', type='primary'):
-                create_project(st.session_state.project)
+                create_project(st.session_state.project, st.session_state.username)
         if status == 'Load':
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
             if st.button('Load'):
-                load_project(st.session_state.project)
+                load_project(st.session_state.project, st.session_state.username)
                 st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
                 st.rerun()
     
