@@ -480,7 +480,7 @@ if st.session_state.step == 'Data Loading':
         uploaded_file = st.sidebar.file_uploader('Upload your csv here')
         separator = st.sidebar.text_input('Separator',placeholder=',')
         if uploaded_file is not None:
-            if st.sidebar.button('Load', type='Primary'):
+            if st.sidebar.button('Load', type='primary'):
                 st.session_state.raw = data_loading()
         # Choosing target and approach
         if "raw" in st.session_state:
