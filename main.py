@@ -117,7 +117,7 @@ def load_project(project_name,user):
     except:
         try:
             st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv')
-            st.write('data saved to file')
+            st.write('data loaded from file')  
             st.session_state.step = 'EDA and Feature Selection'
             return st.session_state.raw
         except:
@@ -134,7 +134,8 @@ def data_loading():
         st.session_state.raw = pd.read_csv(uploaded_file)
     if st.session_state.raw.columns[0] == 'Unnamed: 0':
         st.session_state.raw = st.session_state.raw.iloc[:,1:]
-        st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
+    st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
+    st.write('data loaded from file')
     return st.session_state.raw
         
 #EDA
