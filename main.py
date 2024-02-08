@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score, roc_curve, explained_variance_score, mean_squared_error, r2_score
+from sklearn.metrics import roc_auc_score, roc_curve, explained_variance_score, mean_squared_error, r2_score, precision_recall_fscore_support, f1_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.ensemble import GradientBoostingClassifier
@@ -17,6 +17,7 @@ from pandas.api.types import is_numeric_dtype
 from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 import pyodbc
 import inspect
 import json
@@ -35,15 +36,13 @@ def azure_connection():
     connectionString = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};Trusted_connection=no'
     connection = pyodbc.connect(connectionString)
     st.session_state.cursor = connection.cursor()
-    #cursor.execute('''CREATE SCHEMA mlassistant
-                   #;''')
-    #cursor.execute('''if not exists (select * from sysobjects where name='Users' and xtype='U')
-    #               CREATE TABLE mlassistant.Users (
-    #               Username varchar(50) NOT NULL PRIMARY KEY,
-    #               Password varchar(50) NOT NULL,
-    #               Registration_Date date NOT NULL)
-    #               ;''')
     return connection
+
+# Create folder struccture if it doesn't exist
+def folder_management():
+    st.write(os.listdir('./'))
+    if 'users' not in os.listdir('./'):
+        os.mkdir('./users')
 
 def user_create(username,password):
     try:
@@ -52,7 +51,8 @@ def user_create(username,password):
         st.session_state.username = username
         st.write('User succesfully created!!')
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
-        time.sleep(2.5)
+        os.mkdir(f'./users/{username}')
+        time.sleep(1.5)
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
     except:
@@ -85,8 +85,33 @@ def create_project(project_name):
 #Project loading
 def load_project(project_name):
     st.session_state.cursor.execute(f"UPDATE mlassistant.projects set LastOpened = CURRENT_TIMESTAMP WHERE ProjectName = '{project_name}';")
-    st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
     st.session_state.connection.commit()
+    st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
+    st.session_state.my_models = pd.read_sql(f'''SELECT ModelName AS model,
+                                                Method AS method,
+                                                Scaler AS scaler,
+                                                DimensionalityReduction AS dimensionality_reduction,
+                                                Rmse AS rmse,
+                                                R2Score AS r2_score,
+                                                ExplainedVariance AS explained_variance,
+                                                AUC,
+                                                Accuracy AS accuracy,
+                                                Recall AS recall,
+                                                Precision AS precision,
+                                                F1 AS f1,
+                                                TrainingTime AS training_time,
+                                                Features AS features,
+                                                Hyperparamenters AS hyperparameters,
+                                                Approach AS approach,
+                                                Project AS project,
+                                                pr.CreatedAt AS created_at
+                                             FROM mlassistant.tested_models tm JOIN mlassistant.projects pr
+                                                ON tm.Project = pr.ProjectName
+                                             WHERE pr.Owner = '{st.session_state.username}'
+                                                AND tm.Project = '{project_name}';''',
+                                            st.session_state.connection)
+    
+        
     
 # Data loading
 #@st.cache_data
@@ -116,7 +141,7 @@ def eda(eda_feature):
     st.pyplot()
 
 #Filter the table and transform the data to numeric
-def filter_tarnsform(df,selected_features,target):
+def filter_transform(df,selected_features,target):
     st.session_state.data = df[selected_features].dropna()
     to_dummy = [feature for feature in selected_features if len(st.session_state.raw[feature].unique()) < 15]
     for feature in to_dummy:
@@ -141,7 +166,7 @@ def model_selection(data,target):
         temperature= 0.6,
         messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                 {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
-                        Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the 7 top models of sklearn to create a {st.session_state.approach} for {target}.
+                        Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the top 7 models to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
                         recomended scaler if any for the model and dataset, and "import" the python script used to import the required final method from the library.
                         ''' + '''The resulting JSON object should be in this format: [{"model":"string","method":"string","scaler": "string","import": "string"}].\n\n
@@ -157,14 +182,17 @@ def model_testing(data,target, approach, models):
     X= data[data.columns.drop(target)]
     if approach == 'classifier' and len(data[target].unique()) == 2 :
         y = pd.get_dummies(data[target],drop_first=True)
-        models['AUC'] = None
-        models['score'] = None
     else:
         y = data[target]
-        models['rmse'] = None
-        models['r2_score'] = None
-        models['explained_variance'] = None
-    models['training_time'] = None
+    models['rmse'] = np.nan
+    models['r2_score'] = np.nan
+    models['explained_variance'] = np.nan
+    models['AUC'] = np.nan
+    models['accuracy'] = np.nan
+    models['recall'] = np.nan
+    models['precision'] = np.nan
+    models['f1'] = np.nan
+    models['training_time'] = np.nan
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
     fig = plt.figure()
     for i in models.index:
@@ -177,10 +205,15 @@ def model_testing(data,target, approach, models):
             else:
                 X_train_i, X_test_i = X_train, X_test
             start = time.time()
-            model = eval(f"{models.loc[i,['method']][0].split('.')[-1].split(' ')[-1].strip('()')}().fit(X_train_i,y_train)")
+            try:
+                model = eval(f"{models.loc[i,['method']][0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1).fit(X_train_i,y_train)")
+            except:
+                model = eval(f"{models.loc[i,['method']][0].split('.')[-1].split(' ')[-1].strip('()')}().fit(X_train_i,y_train)")
             models.loc[i,'training_time'] = time.time() - start
+            y_pred = model.predict(X_test_i)
             if st.session_state.approach == 'classifier':
-                models.loc[i,'score'] = model.score(X_test_i, y_test)
+                models.loc[i,'accuracy'] = model.score(X_test_i, y_test)
+                models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,y_pred,average='weighted')
                 try:
                     models.loc[i,'AUC'] = roc_auc_score(y_test,model.predict_proba(X_test_i)[:, 1])
                     fpr, tpr, thresholds = roc_curve(y_test, model.predict_proba(X_test_i)[:, 1])
@@ -188,9 +221,9 @@ def model_testing(data,target, approach, models):
                 except:
                     pass
             else:
-                models.loc[i,'rmse'] = mean_squared_error(y_test,model.predict(X_test_i),squared=False)
-                models.loc[i,'r2_score'] = r2_score(y_test,model.predict(X_test_i))
-                models.loc[i,'explained_variance'] = explained_variance_score(y_test,model.predict(X_test_i))
+                models.loc[i,'rmse'] = mean_squared_error(y_test,y_pred,squared=False)
+                models.loc[i,'r2_score'] = r2_score(y_test,model.y_pred)
+                models.loc[i,'explained_variance'] = explained_variance_score(y_test,y_pred)
         except:
             st.text(f"{models.loc[i,'model']} could not be tested")
     if st.session_state.approach == 'classifier':
@@ -209,9 +242,14 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     test_model_df = models.loc[models['model'] == test_model,:]
     combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
     exec(models.loc[i,'import'])
-    model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
+    try:
+        model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1)")
+    except:
+        model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}()")
     hyperparams = str(inspect.signature(model.__init__))
-    hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')[1:]]
+    st.write(hyperparams)
+    hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')]
+    st.write(hyperparams)
     st.write(str(combinations))
     response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -259,7 +297,10 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     if scaler is not None:
         scaler = eval(scaler + '()')
         X = scaler.fit_transform(X)
-    grid_search = GridSearchCV(model, param_grid2, cv=5)
+    try:
+        grid_search = GridSearchCV(model, param_grid, cv=5)
+    except:
+        grid_search = GridSearchCV(model, param_grid2, cv=5)
     start = time.time()
     grid_search.fit(X,y)
     st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
@@ -271,7 +312,9 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     best_model.fit(X_train,y_train)
 
     if st.session_state.approach == 'classifier':
-        test_model_df.loc[i,'score'] = best_model.score(X_test, y_test)
+        test_model_df.loc[i,'accuracy'] = best_model.score(X_test, y_test)
+        models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,best_model.predict(X_test),average='weighted')
+                
     else:
         test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
         test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
@@ -300,9 +343,57 @@ def save_model(model_name, trained_model, model_df, selected_features):
     model_df['model'] = model_name
     model_df['hyperparameters'] = str(trained_model.get_params())
     model_df['features'] = str(selected_features)
-    
+    model_df['dimensionality_reduction'] = None
+    model_df = model_df.reset_index(drop=True)
     st.dataframe(model_df)
+    buffer = StringIO()
+    model_df.info(buf=buffer)
+    s = buffer.getvalue()
+    model_df.fillna('NULL',inplace=True)
+    st.session_state.cursor.execute(f'''INSERT INTO mlassistant.tested_models(
+                                                ModelName,
+                                                Approach,
+                                                Method,
+                                                Scaler,
+                                                DimensionalityReduction,
+                                                Rmse,
+                                                R2Score,
+                                                ExplainedVariance,
+                                                AUC,
+                                                Accuracy,
+                                                Recall,
+                                                Precision,
+                                                F1,
+                                                TrainingTime,
+                                                Features,
+                                                Hyperparameters,
+                                                Project,
+                                                CreatedAt)
+                                    VALUES('{model_df.loc[0,'model']}',
+                                                '{st.session_state.approach}',
+                                                '{model_df.loc[0,'method']}',
+                                                '{model_df.loc[0,'scaler']}',
+                                                '{model_df.loc[0,'dimensionality_reduction']}',
+                                                {model_df.loc[0,'rmse']},
+                                                {model_df.loc[0,'r2_score']},
+                                                {model_df.loc[0,'explained_variance']},
+                                                {model_df.loc[0,'AUC']},
+                                                {model_df.loc[0,'accuracy']},
+                                                {model_df.loc[0,'recall']},
+                                                {model_df.loc[0,'precision']},
+                                                {model_df.loc[0,'f1']},
+                                                {model_df.loc[0,'training_time']},
+                                                '{str(model_df.loc[0,'features']).replace("'",'"')}',
+                                                '{str(model_df.loc[0,'hyperparameters']).replace("'",'"')}',
+                                                '{st.session_state.project}',
+                                                CURRENT_TIMESTAMP);''')
+    st.session_state.connection.commit()
     
+
+
+
+
+
     if "my_models" not in st.session_state:
         st.session_state.my_models = model_df
     else:
@@ -316,6 +407,9 @@ st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=N
 # Create the connection with the database
 if "connetion" not in st.session_state:    
     st.session_state.connection = azure_connection()
+
+# Create folders if necessary
+folder_management()
 
 # We choose the step (page) to work on
 if "step" not in st.session_state:
@@ -401,7 +495,7 @@ if st.session_state.step == 'EDA and Feature Selection':
 # Feature selection
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features)
         if st.sidebar.button('Filter and transform'):
-            st.session_state.data = filter_tarnsform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
+            st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
         if "data" in st.session_state:
             st.dataframe(st.session_state.data)
             st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
@@ -428,7 +522,7 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         model_name = st.text_input('model name')
         if st.button('Save model'):
             save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features)
-    if st.checkbox('My models') and "my_models" in st.session_state:
+    if st.checkbox('My models', value = True) and "my_models" in st.session_state:
         st.dataframe(st.session_state.my_models)
     if st.checkbox('Show recommended models', value=True):    
         st.dataframe(st.session_state.models)
