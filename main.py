@@ -104,7 +104,7 @@ def load_project(project_name,user):
                                                 F1 AS f1,
                                                 TrainingTime AS training_time,
                                                 Features AS features,
-                                                Hyperparameters AS hyperparameters,
+                                                Hyperparame ters AS hyperparameters,
                                                 Approach AS approach,
                                                 Project AS project,
                                                 pr.CreatedAt AS created_at
@@ -133,6 +133,7 @@ def data_loading():
         st.session_state.raw = pd.read_csv(uploaded_file)
     if st.session_state.raw.columns[0] == 'Unnamed: 0':
         st.session_state.raw = st.session_state.raw.iloc[:,1:]
+        st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
     return st.session_state.raw
         
 #EDA
@@ -479,7 +480,8 @@ if st.session_state.step == 'Data Loading':
         uploaded_file = st.sidebar.file_uploader('Upload your csv here')
         separator = st.sidebar.text_input('Separator',placeholder=',')
         if uploaded_file is not None:
-            st.session_state.raw = data_loading()
+            if st.sidebar.button('Load', type='Primary'):
+                st.session_state.raw = data_loading()
         # Choosing target and approach
         if "raw" in st.session_state:
             st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns, placeholder="Choose the target")
