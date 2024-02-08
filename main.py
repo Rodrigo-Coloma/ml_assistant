@@ -40,7 +40,6 @@ def azure_connection():
 
 # Create folder struccture if it doesn't exist
 def folder_management():
-    st.write(os.listdir('./'))
     if 'users' not in os.listdir('./'):
         os.mkdir('./users')
 
@@ -62,7 +61,7 @@ def user_login(username,password):
     if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
         st.session_state.username = username
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
-        if username not in os.listdir('./'):
+        if username not in os.listdir('./users/'):
             os.mkdir(f'./users/{username}')
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
