@@ -236,7 +236,7 @@ def model_testing(data,target, approach, models):
     for i in models.index:
         st.text(f"Testing {models.loc[i,'model']}...")
         try:
-            exec(models.loc[i,'import'])
+            exec(models.loc[i,'import']) # here we execute the required importss for each model
             if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
                 scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].split(' ')[-1].strip('()')}()")
                 X_train_i = scaler.fit_transform(X_train)
@@ -279,6 +279,7 @@ def model_testing(data,target, approach, models):
     st.session_state.step = 'Model Testing'
     st.rerun()
 
+# Grid search function
 def grid_search(test_model, models, data, complexity, approach, scaler, dimensionality_reduction, dimensions):
     i = models.index[models['model'] == test_model].to_list()[0]
     test_model_df = models.loc[models['model'] == test_model,:]
@@ -462,8 +463,6 @@ if "step" not in st.session_state:
     st.session_state.step = 'User Login'
     st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
 st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.steps, st.session_state.steps.index(st.session_state.step))
-#We create tabs to navigate through the steps
-#tabs = st.tabs(['Projects', 'Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing'])
 
 #User Management
 if st.session_state.step == 'User Login':
@@ -476,10 +475,6 @@ if st.session_state.step == 'User Login':
         user_login(username,password)
     if st.button('Create'):
         user_create(username,password)
-
-    
-
-
 
 # Project Management
 if st.session_state.step == 'Projects':
