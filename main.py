@@ -451,7 +451,7 @@ st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=N
 if "connetion" not in st.session_state:    
     st.session_state.connection = azure_connection()
 if 'client' not in st.session_state:
-    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
+    gpt_connect()
 # Create folders if necessary
 folder_management()
 
