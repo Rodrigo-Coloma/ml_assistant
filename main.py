@@ -25,7 +25,7 @@ import time
 import os
 
 # Azure connection
-@st.cache_resource
+#@st.cache_resource
 def azure_connection():
     try:
         PASSWORD = dotenv_values('./.env')['AZUREPWD']
@@ -66,6 +66,8 @@ def user_login(username,password):
             os.mkdir(f'./users/{username}')
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
+    else:
+        st.write('Incorrect username or password')
 
 
 
@@ -73,7 +75,7 @@ def user_login(username,password):
 #Project creation
 def create_project(project_name,user):
     #try:
-        st.session_state.cursor.execute('''INSERT INTO mlassistant.projects(ProjectName, Owner, Target, Approach, CreatedAt, LastOpened)
+        st.session_state.cursor.execute(f'''INSERT INTO mlassistant.projects(ProjectName, Owner, Target, Approach, CreatedAt, LastOpened)
                                          VALUES ('{project_name}','{st.session_state.username}', NULL, NULL, CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);''')
         st.session_state.connection.commit()
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
@@ -109,7 +111,7 @@ def load_project(project_name,user):
                                                 TrainingTime AS training_time,
                                                 Features AS features,
                                                 Hyperparameters AS hyperparameters,
-                                                Approach AS approach,
+                                                pr.Approach AS approach,
                                                 Project AS project,
                                                 pr.CreatedAt AS created_at
                                              FROM mlassistant.tested_models tm JOIN mlassistant.projects pr
@@ -121,17 +123,18 @@ def load_project(project_name,user):
         os.mkdir(f'./users/{user}/{project_name}')
     except:
         try:
-            st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv')
+            st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv').iloc[:,1:]
+            st.session_state.target = st.session_state.projects_df.loc[st.session_state.projects_df['ProjectName'] == project_name,'Target'].reset_index(drop=True)[0]
+            st.session_state.approach = st.session_state.projects_df.loc[st.session_state.projects_df['ProjectName'] == project_name,'Approach'].reset_index(drop=True)[0]
             try:
-                st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv') 
+                st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv').iloc[:,1:] 
                 try:
-                    st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended_models.csv') 
+                    st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv').drop('Unnamed: 0', inplace=True) 
                     st.session_state.step = 'Model Testing'
                 except:
                     st.session_state.step = 'Model Selection'
             except:
                 st.session_state.step = 'EDA and Feature Selection'
-            return st.session_state.raw
         except:
             st.session_state.step = 'Data Loading' 
     st.rerun()
@@ -188,12 +191,12 @@ def model_selection(data,target):
     except:
         st.session_state.api_key = st.secrets['GPTAPIKEY']
     st.session_state.client = OpenAI(api_key=st.session_state.api_key)
-
-    completion = st.session_state.client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature= 0.6,
-        messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
-                {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
+    while True:
+        completion = st.session_state.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            temperature= 0.4,
+            messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
+                    {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the top 7 models to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
                         recomended scaler if any for the model and dataset, and "import" the python script used to import the required final method from the library.
@@ -201,7 +204,10 @@ def model_selection(data,target):
                         The dataset:\n''' +
                         f'''{str(data.head(100))}\n\n
                         The JSON object:\n\n'''}])
-    return pd.DataFrame(json.loads(completion.choices[0].message.content))
+        try:
+            return pd.DataFrame(json.loads(completion.choices[0].message.content))
+        except:
+            st.write('Our assistant is a little too imaginative todaay, lets give him another chance')
 
 #Running every recommended model
 #@st.cache_data
@@ -224,6 +230,7 @@ def model_testing(data,target, approach, models):
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
     fig = plt.figure()
     for i in models.index:
+        st.text(f"Testing {models.loc[i,'model']}...")
         try:
             exec(models.loc[i,'import'])
             if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
@@ -250,7 +257,7 @@ def model_testing(data,target, approach, models):
                     pass
             else:
                 models.loc[i,'rmse'] = mean_squared_error(y_test,y_pred,squared=False)
-                models.loc[i,'r2_score'] = r2_score(y_test,model.y_pred)
+                models.loc[i,'r2_score'] = r2_score(y_test,y_pred)
                 models.loc[i,'explained_variance'] = explained_variance_score(y_test,y_pred)
         except:
             st.text(f"{models.loc[i,'model']} could not be tested")
@@ -264,8 +271,8 @@ def model_testing(data,target, approach, models):
     else:
         sns.scatterplot(data=st.session_state.models,y='rmse',x='r2_score')
         st.pyplot()
-    models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recomended.csv')
-    st.session_state.step = 'Model Selection'
+    models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recommended.csv')
+    st.session_state.step = 'Model Testing'
     st.rerun()
 
 def grid_search(test_model, models, data, minutes, approach, scaler):
@@ -330,10 +337,11 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
         X = scaler.fit_transform(X)
     try:
         grid_search = GridSearchCV(model, param_grid, cv=5)
+        grid_search.fit(X,y)
     except:
         grid_search = GridSearchCV(model, param_grid2, cv=5)
+        grid_search.fit(X,y)
     start = time.time()
-    grid_search.fit(X,y)
     st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
     best_model = grid_search.best_estimator_
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
@@ -381,7 +389,8 @@ def save_model(model_name, trained_model, model_df, selected_features):
     model_df.info(buf=buffer)
     s = buffer.getvalue()
     upload_df = model_df.fillna('NULL')
-    st.session_state.cursor.execute(f'''INSERT INTO mlassistant.tested_models(
+    try:
+        st.session_state.cursor.execute(f'''INSERT INTO mlassistant.tested_models(
                                                 ModelName,
                                                 Approach,
                                                 Method,
@@ -418,12 +427,15 @@ def save_model(model_name, trained_model, model_df, selected_features):
                                                 '{str(upload_df.loc[0,'hyperparameters']).replace("'",'"')}',
                                                 '{st.session_state.project}',
                                                 CURRENT_TIMESTAMP);''')
-    st.session_state.connection.commit()
-    if "my_models" not in st.session_state:
-        st.session_state.my_models = model_df
-    else:
-        st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
-    
+        st.session_state.connection.commit()
+        if "my_models" not in st.session_state:
+            st.session_state.my_models = model_df
+        else:
+            st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
+    except:
+        st.write('Model name already in use please choose anotherone')
+
+
 def update_project():
     st.session_state.cursor.execute(f'''UPDATE mlassistant.projects
                                     SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
@@ -522,7 +534,9 @@ if st.session_state.step == 'EDA and Feature Selection':
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
 # Feature selection
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features)
+        if "selected_features" not in st.session_state:
+            st.session_state.selected_features = []
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features,st.session_state.selected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
         if "data" in st.session_state:
@@ -538,7 +552,7 @@ if st.session_state.step == 'Model Selection':
             st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
 # model testing
         if "models" in st.session_state:
-            if st.sidebar.button('Test Models'):
+            if st.sidebar.button('Test Models',type='primary'):
                 model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
         if "models" in st.session_state:
             if st.checkbox('Show recommended models', value=True):    

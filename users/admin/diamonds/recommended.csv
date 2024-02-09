@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Linear Regression,sklearn.linear_model.LinearRegression,StandardScaler,from sklearn.linear_model import LinearRegression,1136.850276307201,0.9186989326952936,0.9187693387276347,,,,,,0.026041030883789062
+1,Random Forest Regression,sklearn.ensemble.RandomForestRegressor,StandardScaler,from sklearn.ensemble import RandomForestRegressor,654.5848159227745,0.9730461034270029,0.9734024051840011,,,,,,2.148461103439331
+2,Gradient Boosting Regression,sklearn.ensemble.GradientBoostingRegressor,StandardScaler,from sklearn.ensemble import GradientBoostingRegressor,854.4212256510526,0.9540766288983386,0.9543283971452818,,,,,,4.375231742858887
+3,Support Vector Regression,sklearn.svm.SVR,StandardScaler,from sklearn.svm import SVR,3225.0912824257994,0.3457048120047467,0.4369006886440753,,,,,,81.00778722763062
+4,K-Nearest Neighbors Regression,sklearn.neighbors.KNeighborsRegressor,StandardScaler,from sklearn.neighbors import KNeighborsRegressor,815.5260958035593,0.9581625285925384,0.9581736363463937,,,,,,0.0
+5,Decision Tree Regression,sklearn.tree.DecisionTreeRegressor,None,from sklearn.tree import DecisionTreeRegressor,850.4279613060434,0.9545048851691137,0.9545048858255174,,,,,,0.3434426784515381
+6,Ridge Regression,sklearn.linear_model.Ridge,StandardScaler,from sklearn.linear_model import Ridge,1136.8427019503656,0.9187000160415464,0.9187704220738876,,,,,,0.015564680099487305
