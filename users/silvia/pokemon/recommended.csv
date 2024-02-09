@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Linear Regression,linear_model.LinearRegression(),StandardScaler,from sklearn.linear_model import LinearRegression,9.069563628969737,0.9946049492707544,0.9951778506214267,,,,,,0.002005338668823242
+1,Random Forest,ensemble.RandomForestRegressor(),None,from sklearn.ensemble import RandomForestRegressor,27.842695630990903,0.9491553445935195,0.949504524686634,,,,,,0.10269594192504883
+2,Gradient Boosting,ensemble.GradientBoostingRegressor(),None,from sklearn.ensemble import GradientBoostingRegressor,17.927272766117287,0.9789209418738738,0.9789451992075829,,,,,,0.08295822143554688
+3,Support Vector Machine,svm.SVR(),StandardScaler,from sklearn.svm import SVR,106.53967155468233,0.2555329926426674,0.2675664109134622,,,,,,0.006980419158935547
+4,K-Nearest Neighbors,neighbors.KNeighborsRegressor(),StandardScaler,from sklearn.neighbors import KNeighborsRegressor,33.116413867897585,0.928070117372658,0.9284388544016066,,,,,,0.0011775493621826172
+5,Decision Tree,tree.DecisionTreeRegressor(),None,from sklearn.tree import DecisionTreeRegressor,45.74602491125019,0.8627445895245401,0.8627455415894614,,,,,,0.004906654357910156
+6,Neural Network,neural_network.MLPRegressor(),StandardScaler,from sklearn.neural_network import MLPRegressor,401.4037270167392,-9.567823465166304,0.3674455813098131,,,,,,0.2990128993988037
