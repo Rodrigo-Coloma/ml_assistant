@@ -18,6 +18,7 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import umap
 import pyodbc
 import inspect
 import json
@@ -121,6 +122,7 @@ def load_project(project_name,user):
                                             st.session_state.connection)
     try:
         os.mkdir(f'./users/{user}/{project_name}')
+    # We try to load the information involved in every step one by one if we succed the app takes us to the next step
     except:
         try:
             st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv').iloc[:,1:]
@@ -128,8 +130,10 @@ def load_project(project_name,user):
             st.session_state.approach = st.session_state.projects_df.loc[st.session_state.projects_df['ProjectName'] == project_name,'Approach'].reset_index(drop=True)[0]
             try:
                 st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv').iloc[:,1:] 
+                st.session_state.selected_features = list(st.session_state.my_models['features'])[-1].strip(']').strip('[')
+                st.session_state.selected_features = [feature for feature in st.session_state.selected_features.split(', ')]
                 try:
-                    st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv').drop('Unnamed: 0', inplace=True) 
+                    st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv') 
                     st.session_state.step = 'Model Testing'
                 except:
                     st.session_state.step = 'Model Selection'
@@ -275,10 +279,10 @@ def model_testing(data,target, approach, models):
     st.session_state.step = 'Model Testing'
     st.rerun()
 
-def grid_search(test_model, models, data, minutes, approach, scaler):
+def grid_search(test_model, models, data, complexity, approach, scaler, dimensionality_reduction, dimensions):
     i = models.index[models['model'] == test_model].to_list()[0]
     test_model_df = models.loc[models['model'] == test_model,:]
-    combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
+    #combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
     exec(models.loc[i,'import'])
     try:
         model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1)")
@@ -288,17 +292,17 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     st.write(hyperparams)
     hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')]
     st.write(hyperparams)
-    st.write(str(combinations))
+    st.write(str(complexity))
     response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
         {
         "role": "system",
-        "content": "For a certain machine learning model and a number of fits. Create a parameter grid to perform a GridSearch wich approximately the given number of fits. Answer should consist only of the requested JSON object."
+        "content": "For a certain machine learning model and a complexity level. Create a parameter grid to perform a GridSearch with the given level of complexity. Answer should consist only of the requested JSON object."
         },
         {
         "role": "user",
-        "content": "Create a GridSearch for a RandomForestClassifier model. This gridsearch MUST be around 30 fits. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON. the product of the number of values in each property of the child object MUST be around or less than 30"
+        "content": "Create a GridSearch for a RandomForestClassifier model. This gridsearch MUST be extremely simple. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON."
         },
         {
         "role": "assistant",
@@ -306,7 +310,7 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
         },
         {
         "role": "user",
-        "content": f"Create a GridSearch for a {test_model} {approach} model. This gridsearch MUST be around {combinations} fits. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON."# The product of the number of values in each property of the child object MUST be around or less than {combinations}"
+        "content": f"Create a GridSearch for a {test_model} {approach} model. This gridsearch MUST be {complexity}. Create a JSON object which contains 1 child object with as many properties as hyperparameters should be included in the GridSearch JSON."# The product of the number of values in each property of the child object MUST be around or less than {combinations}"
         }
         ],
         temperature=0.6,
@@ -324,36 +328,45 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     st.write(param_grid2)
     
     X= data[data.columns.drop(st.session_state.target)]
-    if approach == 'Classifier':
+    if approach == 'Classifier' and len(data[st.session_state.target].unique()) == 2:
         y = pd.get_dummies(data[st.session_state.target], drop_first=True, prefix=st.session_state.target)
     else:
         y = data[st.session_state.target]
-    X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
     st.write(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
     st.text(hyperparams)
     test_model_df.loc[i,'scaler'] = scaler
+    start = time.time()
     if scaler is not None:
         scaler = eval(scaler + '()')
         X = scaler.fit_transform(X)
+    if dimensionality_reduction == 'UMAP':
+        reducer = umap.UMAP(n_components=dimensions)
+        X = reducer.fit_transform(X)
     try:
         grid_search = GridSearchCV(model, param_grid, cv=5)
         grid_search.fit(X,y)
     except:
         grid_search = GridSearchCV(model, param_grid2, cv=5)
         grid_search.fit(X,y)
-    start = time.time()
     st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
     best_model = grid_search.best_estimator_
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
-    if scaler is not None:
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.fit_transform(X_test)
-    best_model.fit(X_train,y_train)
-
     if st.session_state.approach == 'classifier':
         test_model_df.loc[i,'accuracy'] = best_model.score(X_test, y_test)
-        models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,best_model.predict(X_test),average='weighted')
-                
+        models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,best_model.predict(X_test),average='weighted')  
+        try:
+            test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
+            fpr, tpr, thresholds = roc_curve(y_test, best_model.predict_proba(X_test)[:, 1])
+            fig = plt.figure()
+            plt.plot(fpr, tpr, label=models.loc[i,'model'])
+            plt.plot([0, 1], [0, 1],'r--')
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.title('Receiver operating characteristic')
+            plt.legend(loc="lower right")
+            st.pyplot(fig)
+        except:
+            pass   
     else:
         test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
         test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
@@ -361,28 +374,15 @@ def grid_search(test_model, models, data, minutes, approach, scaler):
     #test_model_df['trained_model'] = None
     #test_model_df.loc[i,'trained_model'][0] = best_model
     st.dataframe(test_model_df)
-    try:
-        test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
-        fpr, tpr, thresholds = roc_curve(y_test, best_model.predict_proba(X_test)[:, 1])
-        fig = plt.figure()
-        plt.plot(fpr, tpr, label=models.loc[i,'model'])
-        plt.plot([0, 1], [0, 1],'r--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.title('Receiver operating characteristic')
-        plt.legend(loc="lower right")
-        st.pyplot(fig)
-    except:
-        pass
     
 
     return best_model, test_model_df
 #
-def save_model(model_name, trained_model, model_df, selected_features):
+def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
     model_df['model'] = model_name
     model_df['hyperparameters'] = str(trained_model.get_params())
     model_df['features'] = str(selected_features)
-    model_df['dimensionality_reduction'] = None
+    model_df['dimensionality_reduction'] = f'{dimensionality_reduction}: {dimensions} dimensions'
     model_df = model_df.reset_index(drop=True)
     st.dataframe(model_df)
     buffer = StringIO()
@@ -508,8 +508,12 @@ if st.session_state.step == 'Data Loading':
                 st.session_state.raw = data_loading()
         # Choosing target and approach
         if "raw" in st.session_state:
-            st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns, placeholder="Choose the target")
-            st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'], placeholder="Choose the target")
+            if 'target' not in st.session_state:
+                st.session_state.target = list(st.session_state.raw.columns)[0]
+            st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns,list(st.session_state.raw.columns).index(st.session_state.target), placeholder="Choose the target")
+            if 'approach' not in st.session_state:
+                st.session_state.approach = 'classiffier'
+            st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'],1 if st.session_state.approach == 'regressor' else 0, placeholder="Choose the target")
             st.dataframe(st.session_state.raw)
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
@@ -534,9 +538,7 @@ if st.session_state.step == 'EDA and Feature Selection':
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
 # Feature selection
-        if "selected_features" not in st.session_state:
-            st.session_state.selected_features = []
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features,st.session_state.selected_features)
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
         if "data" in st.session_state:
@@ -562,13 +564,18 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
     test_model = st.sidebar.selectbox(' Test Model ', st.session_state.models['model'], placeholder="Choose the model")
     i = st.session_state.models.index[st.session_state.models['model'] == test_model].to_list()[0]
     scaler = st.sidebar.selectbox("Scaler",[None,"StandardScaler","RobustScaler","MinMaxScaler"])
-    minutes = st.sidebar.slider('Minutes', 0.5, 30.0, 0.5)
+    dimensionality_reduction = st.sidebar.selectbox("Dimensionality reduction",[None,"UMAP"])
+    if dimensionality_reduction is not None:
+        dimensions  = st.sidebar.slider('Number of dimensions', 2, len(st.session_state.data.columns),2)
+    else:
+        dimensions = len(st.session_state.data.columns)
+    complexity = st.sidebar.select_slider('Grid complexity', ['extremely simple', 'very simple', 'simple', 'complex', 'very complex', 'extremely complex'],)
     if st.sidebar.button('Gridsearch'):
-        st.session_state.trained_model, st.session_state.test_model_df = grid_search(test_model,st.session_state.models, st.session_state.data, minutes, st.session_state.approach, scaler)
+        st.session_state.trained_model, st.session_state.test_model_df = grid_search(test_model,st.session_state.models, st.session_state.data, complexity, st.session_state.approach, scaler, dimensionality_reduction,dimensions)
     if "test_model_df" in st.session_state:
         model_name = st.text_input('model name')
         if st.button('Save model'):
-            save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features)
+            save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features, dimensionality_reduction, dimensions)
     if st.checkbox('My models', value = True) and "my_models" in st.session_state:
         st.dataframe(st.session_state.my_models)
     if st.checkbox('Show recommended models', value=True):    
