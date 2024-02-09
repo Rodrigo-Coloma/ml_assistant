@@ -27,6 +27,14 @@ import os
 
 # Azure connection
 #@st.cache_resource
+def gpt_connect():
+    try:
+        st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
+    except:
+        st.session_state.api_key = st.secrets['GPTAPIKEY']
+    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
+
+
 def azure_connection():
     try:
         PASSWORD = dotenv_values('./.env')['AZUREPWD']
@@ -69,9 +77,6 @@ def user_login(username,password):
         st.rerun()
     else:
         st.write('Incorrect username or password')
-
-
-
 
 #Project creation
 def create_project(project_name,user):
@@ -122,8 +127,8 @@ def load_project(project_name,user):
                                             st.session_state.connection)
     try:
         os.mkdir(f'./users/{user}/{project_name}')
-    # We try to load the information involved in every step one by one if we succed the app takes us to the next step
     except:
+        # We try to load the information involved in every step one by one if we succed the app takes us to the next step
         try:
             st.session_state.raw = pd.read_csv(f'./users/{user}/{project_name}/raw.csv').iloc[:,1:]
             st.session_state.target = st.session_state.projects_df.loc[st.session_state.projects_df['ProjectName'] == project_name,'Target'].reset_index(drop=True)[0]
@@ -183,18 +188,9 @@ def filter_transform(df,selected_features,target):
     st.session_state.data.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/data.csv')
     st.session_state.step = 'Model Selection'
     st.rerun()
-    return st.session_state.data
-
 
 #Model selection prompt
-#@st.cache_data
-def model_selection(data,target):
-    
-    try:
-        st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
-    except:
-        st.session_state.api_key = st.secrets['GPTAPIKEY']
-    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
+def model_selection(data,target):  
     while True:
         completion = st.session_state.client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -214,7 +210,6 @@ def model_selection(data,target):
             st.write('Our assistant is a little too imaginative todaay, lets give him another chance')
 
 #Running every recommended model
-#@st.cache_data
 def model_testing(data,target, approach, models):
     st.set_option('deprecation.showPyplotGlobalUse', False)
     X= data[data.columns.drop(target)]
@@ -237,7 +232,7 @@ def model_testing(data,target, approach, models):
         st.text(f"Testing {models.loc[i,'model']}...")
         try:
             exec(models.loc[i,'import']) # here we execute the required importss for each model
-            if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
+            if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].split(' ').strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
                 scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].split(' ')[-1].strip('()')}()")
                 X_train_i = scaler.fit_transform(X_train)
                 X_test_i = scaler.fit_transform(X_test)
@@ -274,9 +269,10 @@ def model_testing(data,target, approach, models):
         st.pyplot(fig)
     else:
         sns.scatterplot(data=st.session_state.models,y='rmse',x='r2_score')
-        st.pyplot()
+        st.pyplot(fig)
     models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recommended.csv')
     st.session_state.step = 'Model Testing'
+    time.sleep(2)
     st.rerun()
 
 # Grid search function
@@ -454,7 +450,8 @@ st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=N
 # Create the connection with the database
 if "connetion" not in st.session_state:    
     st.session_state.connection = azure_connection()
-
+if 'client' not in st.session_state:
+    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
 # Create folders if necessary
 folder_management()
 
