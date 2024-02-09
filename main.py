@@ -29,17 +29,17 @@ import os
 #@st.cache_resource
 def gpt_connect():
     try:
-        st.session_state.api_key = dotenv_values('./.env')['GPTAPIKEY']
+        st.session_state.gpt_key = dotenv_values('./.env')['GPTAPIKEY']
     except:
-        st.session_state.api_key = st.secrets['GPTAPIKEY']
-    st.session_state.client = OpenAI(api_key=st.session_state.api_key)
+        st.session_state.gpt_key = st.secrets['GPTAPIKEY']
+    st.session_state.client = OpenAI(api_key=st.session_state.gpt_key)
 
 
 def azure_connection():
     try:
         PASSWORD = dotenv_values('./.env')['AZUREPWD']
     except:
-        PASSWORD = st.session_state.api_key = st.secrets["AZUREPWD"]
+        PASSWORD = st.secrets["AZUREPWD"]
     SERVER = 'sqlrjcg123.database.windows.net'
     DATABASE = 'Database'
     USERNAME = 'azureuser'
