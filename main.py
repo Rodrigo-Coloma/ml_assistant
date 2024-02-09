@@ -25,8 +25,8 @@ import json
 import time
 import os
 
-# Azure connection
-#@st.cache_resource
+
+# OpenAI
 def gpt_connect():
     try:
         st.session_state.gpt_key = dotenv_values('./.env')['GPTAPIKEY']
@@ -34,7 +34,7 @@ def gpt_connect():
         st.session_state.gpt_key = st.secrets['GPTAPIKEY']
     st.session_state.client = OpenAI(api_key=st.session_state.gpt_key)
 
-
+# Azure connection
 def azure_connection():
     try:
         PASSWORD = dotenv_values('./.env')['AZUREPWD']
@@ -150,7 +150,6 @@ def load_project(project_name,user):
         
     
 # Data loading
-#@st.cache_data
 def data_loading():
     if len(separator) > 0:
         st.session_state.raw = pd.read_csv(uploaded_file,sep=separator)
@@ -374,7 +373,7 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
     
 
     return best_model, test_model_df
-#
+# Saving models
 def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
     model_df['model'] = model_name
     model_df['hyperparameters'] = str(trained_model.get_params())
@@ -447,11 +446,12 @@ def update_project():
 st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
 
 
-# Create the connection with the database
+# Create the connection with the database and OpenAI
 if "connetion" not in st.session_state:    
     st.session_state.connection = azure_connection()
 if 'client' not in st.session_state:
     gpt_connect()
+
 # Create folders if necessary
 folder_management()
 
@@ -573,6 +573,7 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
     if st.checkbox('Show recommended models', value=True):    
         st.dataframe(st.session_state.models)
 
+# Signature
 if "project" in st.session_state:
     st.sidebar.write(f'Working on:  {st.session_state.project}')
 if "username" in st.session_state:
