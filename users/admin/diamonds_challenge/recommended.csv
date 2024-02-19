@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Linear Regression,sklearn.linear_model.LinearRegression(),StandardScaler,from sklearn.linear_model import LinearRegression,1146.4224582739728,0.9192937710191432,0.9192942336161792,,,,,,0.018479347229003906
+1,Random Forest Regression,sklearn.ensemble.RandomForestRegressor(),None,from sklearn.ensemble import RandomForestRegressor,554.7615816611602,0.9811013648773994,0.9811016921324709,,,,,,2.0937609672546387
+2,Gradient Boosting Regression,sklearn.ensemble.GradientBoostingRegressor(),None,from sklearn.ensemble import GradientBoostingRegressor,610.3515988995225,0.977124117457258,0.9771246340576206,,,,,,5.2112717628479
+3,Support Vector Regression,sklearn.svm.SVR(),StandardScaler,from sklearn.svm import SVR,3040.839032286727,0.4321880252356076,0.5022728235129599,,,,,,30.850563526153564
+4,K-Nearest Neighbors Regression,sklearn.neighbors.KNeighborsRegressor(),StandardScaler,from sklearn.neighbors import KNeighborsRegressor,872.9178828682117,0.953208769516443,0.9532808641820152,,,,,,0.07024669647216797
+5,Decision Tree Regression,sklearn.tree.DecisionTreeRegressor(),None,from sklearn.tree import DecisionTreeRegressor,770.4727813436998,0.9635470830122878,0.9635471458467045,,,,,,0.3497283458709717
+6,XGBoost Regression,xgboost.XGBRegressor(),None,import xgboost as xgb,,,,,,,,,

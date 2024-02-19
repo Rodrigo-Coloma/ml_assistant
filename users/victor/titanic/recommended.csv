@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Logistic Regression,sklearn.linear_model.LogisticRegression(),StandardScaler(),from sklearn.linear_model import LogisticRegression,,,,0.8200396825396825,0.7762237762237763,0.7762237762237763,0.7767323585505403,0.7739661468475028,3.3463714122772217
+1,Random Forest,sklearn.ensemble.RandomForestClassifier(),None,from sklearn.ensemble import RandomForestClassifier,,,,0.8280753968253969,0.7412587412587412,0.7412587412587412,0.7423153769307616,0.7372062465883976,0.1040806770324707
+2,Gradient Boosting,sklearn.ensemble.GradientBoostingClassifier(),None,from sklearn.ensemble import GradientBoostingClassifier,,,,0.7967261904761904,0.7342657342657343,0.7342657342657343,0.7395476863561969,0.7270184361093452,0.09059357643127441
+3,Support Vector Machine,sklearn.svm.SVC(),StandardScaler(),from sklearn.svm import SVC,,,,,0.7902097902097902,0.7902097902097902,0.7945558278039097,0.7864864633530484,0.0035240650177001953
+4,K-Nearest Neighbors,sklearn.neighbors.KNeighborsClassifier(),StandardScaler(),from sklearn.neighbors import KNeighborsClassifier,,,,0.7899801587301587,0.7412587412587412,0.7412587412587412,0.7423153769307616,0.7372062465883976,0.0029273033142089844
+5,Naive Bayes,sklearn.naive_bayes.GaussianNB(),None,from sklearn.naive_bayes import GaussianNB,,,,0.795436507936508,0.4755244755244755,0.4755244755244755,0.6803637538931656,0.35168366549409696,0.0
+6,Decision Tree,sklearn.tree.DecisionTreeClassifier(),None,from sklearn.tree import DecisionTreeClassifier,,,,0.7049603174603175,0.6923076923076923,0.6923076923076923,0.6905187835420393,0.6901760889712697,0.004514217376708984

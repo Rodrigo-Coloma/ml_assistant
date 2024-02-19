@@ -4,27 +4,29 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
 from sklearn.metrics import roc_auc_score, roc_curve, explained_variance_score, mean_squared_error, r2_score, precision_recall_fscore_support, f1_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBRegressor, XGBRFClassifier
 from openai import OpenAI
 from dotenv import dotenv_values
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from io import StringIO
 import matplotlib.pyplot as plt
+import sqlite3 as lite
 import seaborn as sns
 import numpy as np
+import pickle
 import umap
-import pyodbc
 import inspect
 import json
 import time
 import os
-
 
 # OpenAI
 def gpt_connect():
@@ -34,17 +36,9 @@ def gpt_connect():
         st.session_state.gpt_key = st.secrets['GPTAPIKEY']
     st.session_state.client = OpenAI(api_key=st.session_state.gpt_key)
 
-# Azure connection
-def azure_connection():
-    try:
-        PASSWORD = dotenv_values('./.env')['AZUREPWD']
-    except:
-        PASSWORD = st.secrets["AZUREPWD"]
-    SERVER = 'sqlrjcg123.database.windows.net'
-    DATABASE = 'Database'
-    USERNAME = 'azureuser'
-    connectionString = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};Trusted_connection=no'
-    connection = pyodbc.connect(connectionString)
+# SQLite connection
+def sqlite_connection():
+    connection = lite.connect('./database/aiama.db')
     st.session_state.cursor = connection.cursor()
     return connection
 
@@ -55,12 +49,13 @@ def folder_management():
 
 def user_create(username,password):
     try:
-        st.session_state.cursor.execute(f"INSERT INTO mlassistant.users(Username, Password, Registration_Date) VALUES ('{username}','{password}',CURRENT_TIMESTAMP);")
+        st.session_state.cursor.execute(f"INSERT INTO users(Username, Password, Registration_Date) VALUES ('{username}','{password}',CURRENT_TIMESTAMP);")
         st.session_state.connection.commit()
         st.session_state.username = username
         st.write('User succesfully created!!')
-        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
-        os.mkdir(f'./users/{username}')
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
+        if username not in os.listdir('./users/'):
+            os.mkdir(f'./users/{username}')
         time.sleep(1.5)
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
@@ -70,7 +65,7 @@ def user_create(username,password):
 def user_login(username,password):
     if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
         st.session_state.username = username
-        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
         if username not in os.listdir('./users/'):
             os.mkdir(f'./users/{username}')
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
@@ -80,11 +75,11 @@ def user_login(username,password):
 
 #Project creation
 def create_project(project_name,user):
-    #try:
-        st.session_state.cursor.execute(f'''INSERT INTO mlassistant.projects(ProjectName, Owner, Target, Approach, CreatedAt, LastOpened)
+    try:
+        st.session_state.cursor.execute(f'''INSERT INTO projects(ProjectName, Owner, Target, Approach, CreatedAt, LastOpened)
                                          VALUES ('{project_name}','{st.session_state.username}', NULL, NULL, CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);''')
         st.session_state.connection.commit()
-        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
+        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
         st.session_state.project = project_name
         try:
             os.mkdir(f'./users/{user}/{project_name}')
@@ -94,16 +89,17 @@ def create_project(project_name,user):
         time.sleep(1.5)
         st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
         st.rerun()
-    #except:
+    except:
         st.write('Project name already exists or contains invalid characters, please choose a new one')
 
 #Project loading
 def load_project(project_name,user):
-    st.session_state.cursor.execute(f"UPDATE mlassistant.projects set LastOpened = CURRENT_TIMESTAMP WHERE ProjectName = '{project_name}';")
+    st.session_state.cursor.execute(f"UPDATE projects set LastOpened = CURRENT_TIMESTAMP WHERE ProjectName = '{project_name}';")
     st.session_state.connection.commit()
-    st.session_state.projects_df = pd.read_sql(f"SELECT * FROM mlassistant.projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
-    st.session_state.my_models = pd.read_sql(f'''SELECT ModelName AS model,
-                                                Method AS method,
+    st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)      
+    st.session_state.my_models = pd.read_sql(f'''SELECT Name AS name,
+                                                Model AS model,
+                                                Import AS import,
                                                 Scaler AS scaler,
                                                 DimensionalityReduction AS dimensionality_reduction,
                                                 Rmse AS rmse,
@@ -120,7 +116,7 @@ def load_project(project_name,user):
                                                 pr.Approach AS approach,
                                                 Project AS project,
                                                 pr.CreatedAt AS created_at
-                                             FROM mlassistant.tested_models tm JOIN mlassistant.projects pr
+                                             FROM tested_models tm JOIN projects pr
                                                 ON tm.Project = pr.ProjectName
                                              WHERE pr.Owner = '{st.session_state.username}'
                                                 AND tm.Project = '{project_name}';''',
@@ -147,7 +143,12 @@ def load_project(project_name,user):
         except:
             st.session_state.step = 'Data Loading' 
     st.rerun()
-        
+
+# Project deletion
+def delete_project(project):
+    st.session_state.cursor.execute(f"DELETE FROM projects WHERE Owner = '{st.session_state.username}' and ProjectName= '{project}';")
+    st.session_state.projects_df.drop(st.session_state.projects_df[st.session_state.projects_df['ProjectName'] == project].index)
+    pass
     
 # Data loading
 def data_loading():
@@ -163,25 +164,43 @@ def data_loading():
 #EDA
 def eda(eda_feature):
     st.set_option('deprecation.showPyplotGlobalUse', False)
-    fig = plt.figure()
+    fig, ax= plt.subplots(1,2, figsize = (16,9))
     if st.session_state.approach == 'classifier'    :
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
-            sns.boxplot(data=st.session_state.raw,y=eda_feature,hue=st.session_state.target, showfliers = False)           
+            #sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
+            sns.boxplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target, showfliers = False)           
         else:
-            sns.countplot(data=st.session_state.raw,y=eda_feature,hue=st.session_state.target)            
+            #sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
+            sns.countplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target)            
     else:
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
-            sns.scatterplot(data=st.session_state.raw,x=eda_feature,y=st.session_state.target)           
+            sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,bins=50)
+            sns.scatterplot(ax= ax[1],data=st.session_state.raw,x=eda_feature,y=st.session_state.target)          
         else:
-            sns.boxplot(data=st.session_state.raw,y=st.session_state.target,hue=eda_feature, showfliers = False)
-    st.pyplot()
+            sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature)
+            sns.boxplot(ax= ax[1],data=st.session_state.raw,y=st.session_state.target,hue=eda_feature, showfliers = False)
+    st.pyplot(fig)
+
+#Correlations heatmap
+def correlations_heatmap():  
+    fig = plt.figure(figsize=(16, 6))
+    heatmap = sns.heatmap(st.session_state.raw.select_dtypes(exclude= ['object']).corr(), vmin=-1, vmax=1, annot=True)
+    heatmap.set_title('Correlation Heatmap', fontdict={'fontsize':12}, pad=12)
+    st.pyplot(fig)
+
+def eliminate_outliers(feature,ma,mi):
+    st.session_state.raw = st.session_state.raw.loc[(st.session_state.raw[feature] > mi) & (st.session_state.raw[feature] < ma)]
+
+def substitute_outliers(feature, ma,mi):
+    st.session_state.raw.loc[st.session_state.raw[feature] < mi] = mi
+    st.session_state.raw.loc[st.session_state.raw[feature] > ma] = ma
 
 #Filter the table and transform the data to numeric
 def filter_transform(df,selected_features,target):
     st.session_state.data = df[selected_features].dropna()
-    to_dummy = [feature for feature in selected_features if len(st.session_state.raw[feature].unique()) < 15]
+    to_dummy = [feature for feature in selected_features if st.session_state.data[feature].dtype == 'object' and len(st.session_state.raw[feature].unique()) < 15]
     for feature in to_dummy:
-        dummies_df = pd.get_dummies(st.session_state.data[feature], prefix=feature, drop_first=True)
+        dummies_df = pd.get_dummies(st.session_state.data[feature], prefix=feature, drop_first=True).astype(int)
         st.session_state.data = pd.concat([st.session_state.data, dummies_df],axis=1).drop(feature, axis=1)   
     st.session_state.data = pd.concat([st.session_state.data.select_dtypes(exclude=['object']),df[target]], axis=1).dropna()
     st.session_state.data.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/data.csv')
@@ -194,7 +213,8 @@ def model_selection(data,target):
         completion = st.session_state.client.chat.completions.create(
             model="gpt-3.5-turbo",
             temperature= 0.4,
-            messages=[{"role": "system", "content": f"For the given dataset choose the top 7 sklearn models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
+            response_format={ "type": "json_object" },
+            messages=[{"role": "system", "content": f"For the given dataset choose the top 7 s models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                     {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the top 7 models to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
@@ -204,7 +224,8 @@ def model_selection(data,target):
                         f'''{str(data.head(100))}\n\n
                         The JSON object:\n\n'''}])
         try:
-            return pd.DataFrame(json.loads(completion.choices[0].message.content))
+            #st.write(json.loads(completion.choices[0].message.content))
+            return pd.DataFrame(json.loads(completion.choices[0].message.content)['models'])
         except:
             st.write('Our assistant is a little too imaginative todaay, lets give him another chance')
 
@@ -230,8 +251,8 @@ def model_testing(data,target, approach, models):
     for i in models.index:
         st.text(f"Testing {models.loc[i,'model']}...")
         try:
-            exec(models.loc[i,'import']) # here we execute the required importss for each model
-            if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].split(' ').strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
+            exec(models.loc[i,'import']) # here we execute the required imports for each model
+            if models.loc[i,['scaler']][0] is not None and models.loc[i,['scaler']][0].split('.')[-1].split(' ')[-1].strip('()') in ['StandardScaler', 'RobustScaler', 'MinMaxScaler']:
                 scaler = eval(f"{models.loc[i,['scaler']][0].split('.')[-1].split(' ')[-1].strip('()')}()")
                 X_train_i = scaler.fit_transform(X_train)
                 X_test_i = scaler.fit_transform(X_test)
@@ -338,15 +359,19 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
     if dimensionality_reduction == 'UMAP':
         reducer = umap.UMAP(n_components=dimensions)
         X = reducer.fit_transform(X)
+    elif dimensionality_reduction == 'PCA':
+        reducer = PCA(n_components=dimensions)
+        X = reducer.fit_transform(X)
     try:
-        grid_search = GridSearchCV(model, param_grid, cv=5)
+        grid_search = GridSearchCV(model, param_grid, cv=3, n_jobs=-1)#,error_score='raise')
         grid_search.fit(X,y)
     except:
-        grid_search = GridSearchCV(model, param_grid2, cv=5)
+        grid_search = GridSearchCV(model, param_grid2, cv=3, n_jobs=-1)#,error_score='raise')
         grid_search.fit(X,y)
     st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
     best_model = grid_search.best_estimator_
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
+    best_model.fit(X_train,y_train)
     if st.session_state.approach == 'classifier':
         test_model_df.loc[i,'accuracy'] = best_model.score(X_test, y_test)
         models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,best_model.predict(X_test),average='weighted')  
@@ -375,21 +400,21 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
     return best_model, test_model_df
 # Saving models
 def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
-    model_df['model'] = model_name
+    model_df['name'] = model_name.replace(' ','_')
     model_df['hyperparameters'] = str(trained_model.get_params())
     model_df['features'] = str(selected_features)
     model_df['dimensionality_reduction'] = f'{dimensionality_reduction}: {dimensions} dimensions'
     model_df = model_df.reset_index(drop=True)
-    st.dataframe(model_df)
     buffer = StringIO()
     model_df.info(buf=buffer)
     s = buffer.getvalue()
     upload_df = model_df.fillna('NULL')
     try:
-        st.session_state.cursor.execute(f'''INSERT INTO mlassistant.tested_models(
-                                                ModelName,
+        st.session_state.cursor.execute(f'''INSERT INTO tested_models(
+                                                Name,
+                                                Model,
                                                 Approach,
-                                                Method,
+                                                Import,
                                                 Scaler,
                                                 DimensionalityReduction,
                                                 Rmse,
@@ -405,9 +430,10 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
                                                 Hyperparameters,
                                                 Project,
                                                 CreatedAt)
-                                    VALUES('{upload_df.loc[0,'model']}',
+                                    VALUES('{upload_df.loc[0,'name']}',
+                                                '{upload_df.loc[0,'method'].split('.')[-1].split(' ')[-1].strip('()')}',
                                                 '{st.session_state.approach}',
-                                                '{upload_df.loc[0,'method']}',
+                                                '{upload_df.loc[0,'import']}',
                                                 '{upload_df.loc[0,'scaler']}',
                                                 '{upload_df.loc[0,'dimensionality_reduction']}',
                                                 {upload_df.loc[0,'rmse']},
@@ -429,11 +455,11 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
         else:
             st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
     except:
-        st.write('Model name already in use please choose anotherone')
+        st.write('Model name already in use please choose another one')
 
 
 def update_project():
-    st.session_state.cursor.execute(f'''UPDATE mlassistant.projects
+    st.session_state.cursor.execute(f'''UPDATE projects
                                     SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
                                     WHERE ProjectName = '{st.session_state.project}';''')
     st.session_state.connection.commit()
@@ -448,7 +474,7 @@ st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=N
 
 # Create the connection with the database and OpenAI
 if "connetion" not in st.session_state:    
-    st.session_state.connection = azure_connection()
+    st.session_state.connection = sqlite_connection()
 if 'client' not in st.session_state:
     gpt_connect()
 
@@ -463,7 +489,7 @@ st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.ste
 
 #User Management
 if st.session_state.step == 'User Login':
-    st.session_state.users_df = pd.read_sql("SELECT * FROM mlassistant.users", st.session_state.connection)
+    st.session_state.users_df = pd.read_sql("SELECT * FROM users", st.session_state.connection)
     if "username" in st.session_state and st.session_state.username == 'admin':
         st.dataframe(st.session_state.users_df)
     username = st.text_input('Username: ',placeholder='Your Username')
@@ -481,13 +507,16 @@ if st.session_state.step == 'Projects':
         st.dataframe(st.session_state.projects_df)
         status = st.selectbox('Create or Load', ['Create', 'Load'], 0)
         if status == 'Create':
-            st.session_state.project = st.text_input('Porject Name').replace(' ','_')
+            st.session_state.project = st.text_input('Project Name').replace(' ','_')
             if st.button('Create', type='primary'):
                 create_project(st.session_state.project, st.session_state.username)
         if status == 'Load':
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
-            if st.button('Load'):
+            if st.button('Load',type='primary'):
                 load_project(st.session_state.project, st.session_state.username)
+            if st.button('Delete'):
+                delete_project(st.session_state.project)
+
     
 #Data loading
 if st.session_state.step == 'Data Loading':
@@ -501,8 +530,9 @@ if st.session_state.step == 'Data Loading':
         # Choosing target and approach
         if "raw" in st.session_state:
             if 'target' not in st.session_state:
-                st.session_state.target = list(st.session_state.raw.columns)[0]
-            st.session_state.target = st.sidebar.selectbox('Target', st.session_state.raw.columns,list(st.session_state.raw.columns).index(st.session_state.target), placeholder="Choose the target")
+                target = st.sidebar.selectbox('Target', st.session_state.raw.columns,0, placeholder="Choose the target")
+            else:
+                target = st.sidebar.selectbox('Target', st.session_state.raw.columns,list(st.session_state.raw.columns).index(st.session_state.target), placeholder="Choose the target")
             if 'approach' not in st.session_state:
                 st.session_state.approach = 'classiffier'
             st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'],1 if st.session_state.approach == 'regressor' else 0, placeholder="Choose the target")
@@ -510,6 +540,7 @@ if st.session_state.step == 'Data Loading':
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
             if st.sidebar.button('Next',type='primary'):
+                st.session_state.target = target
                 update_project()
                 st.session_state.step = 'EDA and Feature Selection'
                 st.rerun()        
@@ -517,26 +548,44 @@ if st.session_state.step == 'Data Loading':
             st.markdown('#### Load a file to work on')
 # EDA
 if st.session_state.step == 'EDA and Feature Selection':
+    eda_tab, table_tab, corr_tab, data_tab = st.tabs(['EDA','Source Table','Correlations', 'Clean Data'])
     if "raw" not in st.session_state:
         st.write('Before continuing, please load a dataset to work on')
     else:
-        st.session_state.features = list(st.session_state.raw.columns)
-        st.session_state.features.remove(st.session_state.target)
-        eda_feature = st.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
-        eda(eda_feature)
-        st.session_state.show_table = st.checkbox('Show table', value=True)
-        if st.session_state.show_table:
+        with eda_tab:
+            st.session_state.features = list(st.session_state.raw.columns)
+            st.session_state.features.remove(st.session_state.target)
+            eda_feature = st.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
+            eda(eda_feature)
+            col1, col2 = st.columns([0.2,0.8])
+            with col1:
+                st.dataframe(st.session_state.raw[[eda_feature]].describe())
+            with col2:
+                mi = st.number_input('Minimum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].min())
+                ma = st.number_input('Maximum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].max())
+                if st.button('Eliminate Outliers', type='primary'):
+                    eliminate_outliers(eda_feature,ma,mi)
+                    st.rerun()
+                if st.button('Substitute Outliers',):
+                    substitute_outliers(eda_feature,ma,mi)
+                    st.rerun()
+        with table_tab:
             st.dataframe(st.session_state.raw)
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
+        with corr_tab:
+            correlations_heatmap()
+        with data_tab:
+            if "data" in st.session_state:
+                st.dataframe(st.session_state.data)
+                st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
+            else:
+                st.write('Please filter and transform in order to visualize clean data')
+
 # Feature selection
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
-        if "data" in st.session_state:
-            st.dataframe(st.session_state.data)
-            st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
-
 # model recommendation   
 if st.session_state.step == 'Model Selection':
     if 'data' not in st.session_state:

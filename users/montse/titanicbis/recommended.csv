@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Random Forest,sklearn.ensemble.RandomForestClassifier,,from sklearn.ensemble import RandomForestClassifier,,,,0.8256944444444445,0.7552447552447552,0.7552447552447552,0.7569353723199878,0.7514113143403761,0.1686420440673828
+1,Logistic Regression,sklearn.linear_model.LogisticRegression,sklearn.preprocessing.StandardScaler,from sklearn.linear_model import LogisticRegression,,,,0.8200396825396825,0.7762237762237763,0.7762237762237763,0.7767323585505403,0.7739661468475028,3.201312780380249
+2,Support Vector Machine,sklearn.svm.SVC,sklearn.preprocessing.StandardScaler,from sklearn.svm import SVC,,,,,0.7902097902097902,0.7902097902097902,0.7945558278039097,0.7864864633530484,0.00804448127746582
+3,K-Nearest Neighbors,sklearn.neighbors.KNeighborsClassifier,sklearn.preprocessing.StandardScaler,from sklearn.neighbors import KNeighborsClassifier,,,,0.7899801587301587,0.7412587412587412,0.7412587412587412,0.7423153769307616,0.7372062465883976,0.0075109004974365234
+4,Decision Tree,sklearn.tree.DecisionTreeClassifier,,from sklearn.tree import DecisionTreeClassifier,,,,0.7006944444444445,0.6993006993006993,0.6993006993006993,0.697719116583214,0.6976439538423009,0.004007816314697266
+5,Gradient Boosting,sklearn.ensemble.GradientBoostingClassifier,,from sklearn.ensemble import GradientBoostingClassifier,,,,0.7969246031746031,0.7342657342657343,0.7342657342657343,0.7395476863561969,0.7270184361093452,0.09551000595092773
+6,Naive Bayes,sklearn.naive_bayes.GaussianNB,,from sklearn.naive_bayes import GaussianNB,,,,0.795436507936508,0.4755244755244755,0.4755244755244755,0.6803637538931656,0.35168366549409696,0.0
