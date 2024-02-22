@@ -59,11 +59,11 @@ def user_create(username,password, password_confirm):
             st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
             if username not in os.listdir('./users/'):
                 os.mkdir(f'./users/{username}')
-            time.sleep(1.5)
-            st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
-            st.rerun()
+            time.sleep(1.2)
+            st.session_state.step = 'Projects'
         except:
             st.write('Username already exists or contains invalid characters, please choose a new one')
+        st.rerun()
 
 def user_login(username,password):
     if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
@@ -71,7 +71,7 @@ def user_login(username,password):
         st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
         if username not in os.listdir('./users/'):
             os.mkdir(f'./users/{username}')
-        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+        st.session_state.step = 'Projects'
         st.rerun()
     else:
         st.write('Incorrect username or password')
@@ -91,9 +91,9 @@ def create_project(project_name,user):
         st.write('Project succesfully created!!')
         time.sleep(1.5)
         st.session_state.step = 'Data Loading'
-        st.rerun()
     except:
         st.write('Project name already exists or contains invalid characters, please choose a new one')
+    st.rerun()
 
 #Project loading
 def load_project(project_name,user):
@@ -331,10 +331,7 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
     except:
         model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}()")
     hyperparams = str(inspect.signature(model.__init__))
-    st.write(hyperparams)
     hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')]
-    st.write(hyperparams)
-    st.write(str(complexity))
     response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -363,12 +360,12 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         )
     param_grid = eval(response.choices[0].message.content.split('grid":')[-1].strip('}'))
     st.write(param_grid)
+
     param_grid2 = param_grid.copy()
     for key in param_grid.keys():
         if key not in hyperparams:
             del param_grid2[key]
-    st.write(param_grid2)
-    
+
     X= data[data.columns.drop(st.session_state.target)]
     if approach == 'Classifier' and len(data[st.session_state.target].unique()) == 2:
         y = pd.get_dummies(data[st.session_state.target], drop_first=True, prefix=st.session_state.target)
@@ -605,6 +602,15 @@ if st.session_state.step == 'EDA and Feature Selection':
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
         with corr_tab:
             correlations_heatmap()
+
+# Feature engineering       
+        with data_tab:
+            if "data" in st.session_state:
+                st.dataframe(st.session_state.data)
+                st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
+            else:
+                st.write('Please filter and transform in order to visualize clean data')
+
         with fe_tab:
             col1, col2 , col3, col4 = st.columns(4)
             with col1:
@@ -625,12 +631,6 @@ if st.session_state.step == 'EDA and Feature Selection':
             except:
                 st.write('Your code could not be executed please, check it for errors')
             st.session_state.raw = df.copy()
-        with data_tab:
-            if "data" in st.session_state:
-                st.dataframe(st.session_state.data)
-                st.dataframe(pd.DataFrame({"name": st.session_state.data.columns, "non-nulls": len(st.session_state.data)-st.session_state.data.isnull().sum().values, "nulls": st.session_state.data.isnull().sum().values, "type": st.session_state.data.dtypes.values, "unique": [len(st.session_state.data[col].unique()) for col in st.session_state.data.columns] }))
-            else:
-                st.write('Please filter and transform in order to visualize clean data')
 
 # Feature selection
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
