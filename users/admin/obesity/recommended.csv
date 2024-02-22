@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Random Forest Classifier,RandomForestClassifier,Not required,from sklearn.ensemble import RandomForestClassifier,,,,,0.891859344894027,0.891859344894027,0.8925182027524334,0.8917777759874659,0.27608418464660645
+1,Logistic Regression,LogisticRegression,StandardScaler,from sklearn.linear_model import LogisticRegression,,,,,0.865606936416185,0.865606936416185,0.8647756090854204,0.8649773449601583,4.5111799240112305
+2,Support Vector Machine,SVC,StandardScaler,from sklearn.svm import SVC,,,,,0.8538053949903661,0.8538053949903661,0.8541348835614456,0.8538634053584736,2.6672089099884033
+3,K-Nearest Neighbors,KNeighborsClassifier,StandardScaler,from sklearn.neighbors import KNeighborsClassifier,,,,,0.7165221579961464,0.7165221579961464,0.7116863667031195,0.712363887451424,0.007523775100708008
+4,Decision Tree Classifier,DecisionTreeClassifier,Not required,from sklearn.tree import DecisionTreeClassifier,,,,,0.8439306358381503,0.8439306358381503,0.8458304967469706,0.8446805633590724,0.14948725700378418
+5,Gradient Boosting Classifier,GradientBoostingClassifier,Not required,from sklearn.ensemble import GradientBoostingClassifier,,,,,0.9026974951830443,0.9026974951830443,0.902883911203639,0.9027528049298497,20.31602668762207
+6,XGBoost Classifier,XGBClassifier,Not required,from xgboost import XGBClassifier,,,,,,,,,

@@ -1,0 +1,8 @@
+Unnamed: 0,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Random Forest Regressor,RandomForestRegressor,StandardScaler,from sklearn.ensemble import RandomForestRegressor,661.5215980802416,0.972471803494279,0.972827178627805,,,,,,2.901785373687744
+1,Gradient Boosting Regressor,GradientBoostingRegressor,StandardScaler,from sklearn.ensemble import GradientBoostingRegressor,857.6912863002059,0.9537244382563652,0.9539830527054407,,,,,,6.554630517959595
+2,Support Vector Machine Regressor,SVR,StandardScaler,from sklearn.svm import SVR,3156.013645114981,0.3734331005294952,0.457415147433209,,,,,,77.36075830459595
+3,K-Nearest Neighbors Regressor,KNeighborsRegressor,StandardScaler,from sklearn.neighbors import KNeighborsRegressor,824.6216773370375,0.9572240958471439,0.957230395255877,,,,,,0.0049593448638916016
+4,Decision Tree Regressor,DecisionTreeRegressor,StandardScaler,from sklearn.tree import DecisionTreeRegressor,870.876199783032,0.9522907546219914,0.9526054257550749,,,,,,0.4577357769012451
+5,Lasso Regression,Lasso,StandardScaler,from sklearn.linear_model import Lasso,1133.1050490810849,0.9192337250443665,0.9193041310767076,,,,,,2.1414809226989746
+6,Ridge Regression,Ridge,StandardScaler,from sklearn.linear_model import Ridge,1133.2488337823424,0.9192132261655818,0.919283632197923,,,,,,0.02960944175720215

@@ -1,0 +1,8 @@
+,model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+0,Random Forest Regressor,RandomForestRegressor,Not required,from sklearn.ensemble import RandomForestRegressor,630.8550759897139,0.9749649243955966,0.9749717337646874,,,,,,1.999990463256836
+1,Gradient Boosting Regressor,GradientBoostingRegressor,StandardScaler,from sklearn.ensemble import GradientBoostingRegressor,854.4212256510527,0.9540766288983386,0.9543283971452818,,,,,,4.1749138832092285
+2,XGBoost Regressor,XGBRegressor,StandardScaler,from xgboost import XGBRegressor,1786.0240666116895,0.7993383786628994,0.8276667130849956,,,,,,0.15226268768310547
+3,Lasso Regression,Lasso,StandardScaler,from sklearn.linear_model import Lasso,1136.7083169227876,0.9187192356834923,0.9187896417158334,,,,,,0.6798276901245117
+4,Ridge Regression,Ridge,StandardScaler,from sklearn.linear_model import Ridge,1136.8427019503656,0.9187000160415464,0.9187704220738876,,,,,,0.014189481735229492
+5,Support Vector Machine Regressor,SVR,StandardScaler,from sklearn.svm import SVR,3225.0912824257994,0.3457048120047467,0.4369006886440753,,,,,,85.98681139945984
+6,K-Nearest Neighbors Regressor,KNeighborsRegressor,StandardScaler,from sklearn.neighbors import KNeighborsRegressor,815.5260958035593,0.9581625285925384,0.9581736363463937,,,,,,0.008137702941894531

@@ -1,5 +1,5 @@
 import streamlit as st
-import sklearn
+from streamlit_ace import st_ace
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import GridSearchCV
@@ -47,20 +47,23 @@ def folder_management():
     if 'users' not in os.listdir('./'):
         os.mkdir('./users')
 
-def user_create(username,password):
-    try:
-        st.session_state.cursor.execute(f"INSERT INTO users(Username, Password, Registration_Date) VALUES ('{username}','{password}',CURRENT_TIMESTAMP);")
-        st.session_state.connection.commit()
-        st.session_state.username = username
-        st.write('User succesfully created!!')
-        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
-        if username not in os.listdir('./users/'):
-            os.mkdir(f'./users/{username}')
-        time.sleep(1.5)
-        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
-        st.rerun()
-    except:
-        st.write('Username already exists or contains invalid characters, please choose a new one')
+def user_create(username,password, password_confirm):
+    if password != password_confirm:
+        st.write('Passwords do not match')
+    else:
+        try:
+            st.session_state.cursor.execute(f"INSERT INTO users(Username, Password, Registration_Date) VALUES ('{username}','{password}',CURRENT_TIMESTAMP);")
+            st.session_state.connection.commit()
+            st.session_state.username = username
+            st.write('User succesfully created!!')
+            st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE Owner = '{st.session_state.username}'", st.session_state.connection)
+            if username not in os.listdir('./users/'):
+                os.mkdir(f'./users/{username}')
+            time.sleep(1.5)
+            st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+            st.rerun()
+        except:
+            st.write('Username already exists or contains invalid characters, please choose a new one')
 
 def user_login(username,password):
     if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
@@ -87,7 +90,7 @@ def create_project(project_name,user):
             st.write('Directory existed')
         st.write('Project succesfully created!!')
         time.sleep(1.5)
-        st.session_state.step = st.session_state.steps[1 + st.session_state.steps.index(st.session_state.step)]
+        st.session_state.step = 'Data Loading'
         st.rerun()
     except:
         st.write('Project name already exists or contains invalid characters, please choose a new one')
@@ -144,11 +147,20 @@ def load_project(project_name,user):
             st.session_state.step = 'Data Loading' 
     st.rerun()
 
-# Project deletion
-def delete_project(project):
-    st.session_state.cursor.execute(f"DELETE FROM projects WHERE Owner = '{st.session_state.username}' and ProjectName= '{project}';")
-    st.session_state.projects_df.drop(st.session_state.projects_df[st.session_state.projects_df['ProjectName'] == project].index)
-    pass
+# Project Update
+def update_project():
+    st.session_state.cursor.execute(f'''UPDATE projects
+                                    SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
+                                    WHERE ProjectName = '{st.session_state.project}';''')
+    st.session_state.connection.commit()
+
+
+# Project deletion  
+def delete_project(project,owner):
+    st.session_state.cursor.execute(f'''DELETE FROM projects WHERE Owner = '{owner}' and ProjectName = '{project}';''', {'owner': owner, 'project': project})
+    st.session_state.connection.commit()
+    st.session_state.projects_df.drop(st.session_state.projects_df[st.session_state.projects_df['ProjectName'] == project].index, inplace=True)
+    st.rerun()
     
 # Data loading
 def data_loading():
@@ -167,10 +179,10 @@ def eda(eda_feature):
     fig, ax= plt.subplots(1,2, figsize = (16,9))
     if st.session_state.approach == 'classifier'    :
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
-            #sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
+            sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
             sns.boxplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target, showfliers = False)           
         else:
-            #sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
+            sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature)
             sns.countplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target)            
     else:
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
@@ -183,7 +195,7 @@ def eda(eda_feature):
 
 #Correlations heatmap
 def correlations_heatmap():  
-    fig = plt.figure(figsize=(16, 6))
+    fig = plt.figure(figsize=(16, 8))
     heatmap = sns.heatmap(st.session_state.raw.select_dtypes(exclude= ['object']).corr(), vmin=-1, vmax=1, annot=True)
     heatmap.set_title('Correlation Heatmap', fontdict={'fontsize':12}, pad=12)
     st.pyplot(fig)
@@ -194,6 +206,20 @@ def eliminate_outliers(feature,ma,mi):
 def substitute_outliers(feature, ma,mi):
     st.session_state.raw.loc[st.session_state.raw[feature] < mi] = mi
     st.session_state.raw.loc[st.session_state.raw[feature] > ma] = ma
+
+def label_encode(eda_feature, categories):
+    st.session_state.raw.loc[~st.session_state.raw[eda_feature].isin(categories),eda_feature]= 0
+    for value, category in enumerate(categories):
+        st.session_state.raw.loc[st.session_state.raw[eda_feature] == category,eda_feature]= value + 1
+    st.session_state.raw[eda_feature] = st.session_state.raw[eda_feature].astype('int64')
+    st.rerun()
+
+def feature_creation(feature_name,feature1,operation,feature2):
+    if operation == 'multiply':
+        st.session_state.raw[feature_name] = st.session_state.raw[feature1] * st.session_state.raw[feature2]
+    if operation == 'divide':
+        st.session_state.raw[feature_name] = st.session_state.raw[feature1] / st.session_state.raw[feature2]
+    st.rerun()
 
 #Filter the table and transform the data to numeric
 def filter_transform(df,selected_features,target):
@@ -290,7 +316,7 @@ def model_testing(data,target, approach, models):
     else:
         sns.scatterplot(data=st.session_state.models,y='rmse',x='r2_score')
         st.pyplot(fig)
-    models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recommended.csv')
+    models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/recommended.csv', index=False)
     st.session_state.step = 'Model Testing'
     time.sleep(2)
     st.rerun()
@@ -299,7 +325,6 @@ def model_testing(data,target, approach, models):
 def grid_search(test_model, models, data, complexity, approach, scaler, dimensionality_reduction, dimensions):
     i = models.index[models['model'] == test_model].to_list()[0]
     test_model_df = models.loc[models['model'] == test_model,:]
-    #combinations = max(int(minutes * 60 / (models.loc[i,'training_time'] + 1)),4)
     exec(models.loc[i,'import'])
     try:
         model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1)")
@@ -392,8 +417,6 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
         test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
         test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,best_model.predict(X_test))
-    #test_model_df['trained_model'] = None
-    #test_model_df.loc[i,'trained_model'][0] = best_model
     st.dataframe(test_model_df)
     
 
@@ -457,18 +480,7 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
     except:
         st.write('Model name already in use please choose another one')
 
-
-def update_project():
-    st.session_state.cursor.execute(f'''UPDATE projects
-                                    SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
-                                    WHERE ProjectName = '{st.session_state.project}';''')
-    st.session_state.connection.commit()
-
-
-
-
-#def plot_results(my_models,approach)
-
+# Header
 st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
 
 
@@ -489,33 +501,40 @@ st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.ste
 
 #User Management
 if st.session_state.step == 'User Login':
-    st.session_state.users_df = pd.read_sql("SELECT * FROM users", st.session_state.connection)
+    login_tab, register_tab = st.tabs(['Login','Register'])
     if "username" in st.session_state and st.session_state.username == 'admin':
         st.dataframe(st.session_state.users_df)
-    username = st.text_input('Username: ',placeholder='Your Username')
-    password = st.text_input('Password: ',placeholder='Your Password',type='password')
-    if st.button('Login',type='primary'):
-        user_login(username,password)
-    if st.button('Create'):
-        user_create(username,password)
+    st.session_state.users_df = pd.read_sql("SELECT * FROM users", st.session_state.connection)
+    with login_tab:
+        username = st.text_input('Username: ',placeholder='your_username')
+        password = st.text_input('Password: ',placeholder='your_password',type='password')
+        if st.button('Login',type='primary'):
+            user_login(username,password)
+    with register_tab:
+        username = st.text_input('Username: ')
+        password = st.text_input('Password: ',type='password')
+        password_confirm = st.text_input('Comfirm Password: ',placeholder='Repeat your password',type='password')
+        if st.button('Create',type='primary'):
+            user_create(username,password,password_confirm)
 
 # Project Management
 if st.session_state.step == 'Projects':
+    create_tab, load_tab = st.tabs(['Create','Load'])
     if "username" not in st.session_state:
         st.write('Please login to be able to manage your projects')
     else:
-        st.dataframe(st.session_state.projects_df)
-        status = st.selectbox('Create or Load', ['Create', 'Load'], 0)
-        if status == 'Create':
+        with create_tab:
             st.session_state.project = st.text_input('Project Name').replace(' ','_')
             if st.button('Create', type='primary'):
                 create_project(st.session_state.project, st.session_state.username)
-        if status == 'Load':
+        with load_tab:
+            st.dataframe(st.session_state.projects_df)
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
             if st.button('Load',type='primary'):
                 load_project(st.session_state.project, st.session_state.username)
             if st.button('Delete'):
-                delete_project(st.session_state.project)
+                st.write(st.session_state.project, st.session_state.username)
+                delete_project(st.session_state.project, st.session_state.username)
 
     
 #Data loading
@@ -548,7 +567,7 @@ if st.session_state.step == 'Data Loading':
             st.markdown('#### Load a file to work on')
 # EDA
 if st.session_state.step == 'EDA and Feature Selection':
-    eda_tab, table_tab, corr_tab, data_tab = st.tabs(['EDA','Source Table','Correlations', 'Clean Data'])
+    eda_tab, table_tab, corr_tab, fe_tab, data_tab = st.tabs(['EDA','Source Table','Correlations', 'Feature Engineering', 'Clean Data'])
     if "raw" not in st.session_state:
         st.write('Before continuing, please load a dataset to work on')
     else:
@@ -561,20 +580,51 @@ if st.session_state.step == 'EDA and Feature Selection':
             with col1:
                 st.dataframe(st.session_state.raw[[eda_feature]].describe())
             with col2:
-                mi = st.number_input('Minimum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].min())
-                ma = st.number_input('Maximum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].max())
-                if st.button('Eliminate Outliers', type='primary'):
-                    eliminate_outliers(eda_feature,ma,mi)
-                    st.rerun()
-                if st.button('Substitute Outliers',):
-                    substitute_outliers(eda_feature,ma,mi)
-                    st.rerun()
+                if len(st.session_state.raw[eda_feature]) > 15 and st.session_state.raw[eda_feature].dtype != 'object':
+                    mi = st.number_input('Minimum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].min())
+                    ma = st.number_input('Maximum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].max())
+                    if st.button('Eliminate Outliers', type='primary'):
+                        eliminate_outliers(eda_feature,ma,mi)
+                        st.rerun()
+                    if st.button('Substitute Outliers',):
+                        substitute_outliers(eda_feature,ma,mi)
+                        st.rerun()
+                else:
+                    coll, colr = st.columns([0.3,0.7])
+                    with colr:
+                        st.write('Label encoding')
+                        category_importance = st.multiselect('Choose the categories to be label encoded, the order in which you choose the categories will represent their value when enconded. All non selected categories will be enconded as 0', st.session_state.raw[eda_feature].unique())
+                        if st.button('Label encode',type='primary'):
+                            label_encode(eda_feature,category_importance)
+                    with coll:
+                        st.dataframe({category: value + 1  for value, category in enumerate(category_importance)})
+                
         with table_tab:
             st.dataframe(st.session_state.raw)
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
                                 "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
         with corr_tab:
             correlations_heatmap()
+        with fe_tab:
+            col1, col2 , col3, col4 = st.columns(4)
+            with col1:
+                feature_name = st.text_input('Feature Name')
+            with col2:
+                feature1 = st.selectbox('Feature 1', st.session_state.raw.columns)
+            with col3:
+                operation = st.selectbox('Operation', ['multiply', 'divide'])
+            with col4:
+                feature2 = st.selectbox('Feature 2', st.session_state.raw.columns)
+            if st.button('Create Feature', type='primary'):
+                feature_creation(feature_name,feature1,operation,feature2)
+            st.write('Here you have a box to create your own features with a bit of Python. Please refer to the dataframe as df:')
+            df = st.session_state.raw
+            code=st_ace(language='python')
+            try:
+                exec(code)
+            except:
+                st.write('Your code could not be executed please, check it for errors')
+            st.session_state.raw = df.copy()
         with data_tab:
             if "data" in st.session_state:
                 st.dataframe(st.session_state.data)
@@ -586,6 +636,7 @@ if st.session_state.step == 'EDA and Feature Selection':
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
+
 # model recommendation   
 if st.session_state.step == 'Model Selection':
     if 'data' not in st.session_state:
@@ -593,6 +644,7 @@ if st.session_state.step == 'Model Selection':
     else:
         if st.sidebar.button('Recomended models'):
             st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
+
 # model testing
         if "models" in st.session_state:
             if st.sidebar.button('Test Models',type='primary'):
@@ -600,12 +652,13 @@ if st.session_state.step == 'Model Selection':
         if "models" in st.session_state:
             if st.checkbox('Show recommended models', value=True):    
                 st.dataframe(st.session_state.models)
+
 # Gridsearch
 if st.session_state.step == "Model Testing" and "models" in st.session_state:
     test_model = st.sidebar.selectbox(' Test Model ', st.session_state.models['model'], placeholder="Choose the model")
     i = st.session_state.models.index[st.session_state.models['model'] == test_model].to_list()[0]
     scaler = st.sidebar.selectbox("Scaler",[None,"StandardScaler","RobustScaler","MinMaxScaler"])
-    dimensionality_reduction = st.sidebar.selectbox("Dimensionality reduction",[None,"UMAP"])
+    dimensionality_reduction = st.sidebar.selectbox("Dimensionality reduction",[None,"UMAP","PCA"])
     if dimensionality_reduction is not None:
         dimensions  = st.sidebar.slider('Number of dimensions', 2, len(st.session_state.data.columns),2)
     else:
