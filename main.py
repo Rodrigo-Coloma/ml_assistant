@@ -496,7 +496,7 @@ folder_management()
 # We choose the step (page) to work on
 if "step" not in st.session_state:
     st.session_state.step = 'User Login'
-    st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing']
+    st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing', 'ChatBot Assistant']
 st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.steps, st.session_state.steps.index(st.session_state.step))
 
 #User Management
@@ -674,6 +674,83 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         st.dataframe(st.session_state.my_models)
     if st.checkbox('Show recommended models', value=True):    
         st.dataframe(st.session_state.models)
+
+# ChatBot Assistant
+if st.session_state.step == "ChatBot Assistant" and "models" in st.session_state:
+    assistant_id = "asst_bJ4RIPQgYL4pINAvQOYyjH4h"
+
+    if "start_chat" not in st.session_state:
+        st.session_state.start_chat = False
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = None
+
+    if st.sidebar.button('Start Chat', type='primary'):
+        st.session_state.start_chat = True
+        thread = st.session_state.client.beta.threads.create()
+        st.session_state.thread_id = thread.id
+        
+    if st.sidebar.button('Clear Chat'):
+        st.session_state.start_chat = False
+        st.session_state.thread_id = None
+        st.session_state.messages = []
+
+    if st.session_state.start_chat:
+        if "openai_model" not in st.session_state:
+            st.session_state.openai_model = "gpt-3.5-turbo"
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        st.session_state.client.beta.threads.messages.create(
+                    thread_id= st.session_state.thread_id,
+                    role= 'user',
+                    content = f''' These are th first 50 rows of a dataframe with a total of {len(st.session_state.raw.index)} rows:/n
+                                {str(st.session_state.raw.head(50))}/n
+                                I am trying to create a {st.session_state.approach} model for {st.session_state.target}/n
+                                Can you help me out?'''
+                    )
+        
+        for message in st.session_state.messages:
+            with st.chat_message(message['role']):
+                st.markdown(message['content'])
+
+        if prompt := st.chat_input('Can you help me with this dataset?'):
+
+            st.session_state.messages.append({'role' : 'user', 'content': prompt})
+            with st.chat_message('user'):
+                st.markdown(prompt)
+
+            st.session_state.client.beta.threads.messages.create(
+                    thread_id= st.session_state.thread_id,
+                    role= 'user',
+                    content = prompt
+                    )
+            
+            run = st.session_state.client.beta.threads.runs.create(
+                        thread_id = st.session_state.thread_id,
+                        assistant_id = assistant_id
+                        )
+            
+            while run.status != "completed":
+                time.sleep(1)
+                run = st.session_state.client.beta.threads.runs.retrieve(
+                        thread_id = st.session_state.thread_id,
+                        run_id = run.id
+                        )
+                
+            messages = st.session_state.client.beta.threads.messages.list(
+                    thread_id = st.session_state.thread_id
+                    )
+            
+            #Proccess and display messages
+            assistant_messages_for_run = [
+                message for message in messages
+                if message.run_id == run.id and message.role == 'assistant'
+                ]
+        
+            for message in assistant_messages_for_run:
+                st.session_state.messages.append({'role': 'assistant', 'content': message.content[0].text.value})
+                with st.chat_message('Assistant'):
+                    st.markdown(message.content[0].text.value)
 
 # Signature
 if "project" in st.session_state:
