@@ -676,7 +676,7 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         st.dataframe(st.session_state.models)
 
 # ChatBot Assistant
-if st.session_state.step == "ChatBot Assistant" and "models" in st.session_state:
+if st.session_state.step == "ChatBot Assistant" and "raw" in st.session_state:
     assistant_id = "asst_bJ4RIPQgYL4pINAvQOYyjH4h"
 
     if "start_chat" not in st.session_state:
