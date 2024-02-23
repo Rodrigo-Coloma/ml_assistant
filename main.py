@@ -137,7 +137,7 @@ def load_project(project_name,user):
             try:
                 st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv').iloc[:,1:] 
                 st.session_state.selected_features = list(st.session_state.my_models['features'])[-1].strip(']').strip('[')
-                st.session_state.selected_features = [feature for feature in st.session_state.selected_features.split(', ')]
+                st.session_state.selected_features = [feature.strip('\"') for feature in st.session_state.selected_features.split(', ')]
                 try:
                     st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv') 
                     st.session_state.step = 'Model Testing'
@@ -645,8 +645,9 @@ if st.session_state.step == 'EDA and Feature Engineering':
 
 # Feature selection
         if "selected_features" not in st.session_state:
-            st.session_state.selected_features = st.session_state.features
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
+            st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
+        else:
+            st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
 
