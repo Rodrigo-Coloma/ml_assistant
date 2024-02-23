@@ -63,6 +63,7 @@ def user_create(username,password, password_confirm):
             st.session_state.step = 'Projects'
         except:
             st.write('Username already exists or contains invalid characters, please choose a new one')
+            time.sleep(2)
         st.rerun()
 
 def user_login(username,password):
@@ -93,6 +94,7 @@ def create_project(project_name,user):
         st.session_state.step = 'Data Loading'
     except:
         st.write('Project name already exists or contains invalid characters, please choose a new one')
+        time.sleep(2)
     st.rerun()
 
 #Project loading
@@ -625,11 +627,18 @@ if st.session_state.step == 'EDA and Feature Selection':
                 feature_creation(feature_name,feature1,operation,feature2)
             st.write('Here you have a box to create your own features with a bit of Python. Please refer to the dataframe as df:')
             df = st.session_state.raw
-            code=st_ace(language='python')
-            try:
-                exec(code)
-            except:
-                st.write('Your code could not be executed please, check it for errors')
+
+            if 'execution' not in st.session_state:
+                st.session_state.execution = None
+            code = st_ace(language='python', theme='chrome')
+            if code != st.session_state.execution:
+                try:
+                    exec(code)
+                    st.session_state.execution = code
+                except:
+                    st.write('Your code could not be executed please, check it for errors')
+                    time.sleep(2)
+                st.rerun()
             st.session_state.raw = df.copy()
 
 # Feature selection
