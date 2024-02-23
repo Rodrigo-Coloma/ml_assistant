@@ -495,7 +495,7 @@ folder_management()
 # We choose the step (page) to work on
 if "step" not in st.session_state:
     st.session_state.step = 'User Login'
-    st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Selection', 'Model Selection', 'Model Testing', 'ChatBot Assistant']
+    st.session_state.steps = ['User Login', 'Projects','Data Loading','EDA and Feature Engineering', 'Model Selection', 'Model Testing', 'ChatBot Assistant']
 st.session_state.step = st.sidebar.selectbox('Choose step', st.session_state.steps, st.session_state.steps.index(st.session_state.step))
 
 #User Management
@@ -560,12 +560,12 @@ if st.session_state.step == 'Data Loading':
             if st.sidebar.button('Next',type='primary'):
                 st.session_state.target = target
                 update_project()
-                st.session_state.step = 'EDA and Feature Selection'
+                st.session_state.step = 'EDA and Feature Engineering'
                 st.rerun()        
         else:
             st.markdown('#### Load a file to work on')
 # EDA
-if st.session_state.step == 'EDA and Feature Selection':
+if st.session_state.step == 'EDA and Feature Engineering':
     eda_tab, table_tab, corr_tab, fe_tab, data_tab = st.tabs(['EDA','Source Table','Correlations', 'Feature Engineering', 'Clean Data'])
     if "raw" not in st.session_state:
         st.write('Before continuing, please load a dataset to work on')
@@ -644,7 +644,9 @@ if st.session_state.step == 'EDA and Feature Selection':
             st.session_state.raw = df.copy()
 
 # Feature selection
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
+        if "selected_features" not in st.session_state:
+            st.session_state.selected_features = st.session_state.features.copy()
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.elected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
 
