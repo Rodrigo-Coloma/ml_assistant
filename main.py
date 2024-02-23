@@ -646,7 +646,7 @@ if st.session_state.step == 'EDA and Feature Engineering':
 # Feature selection
         if "selected_features" not in st.session_state:
             st.session_state.selected_features = st.session_state.features.copy()
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.elected_features)
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
 
