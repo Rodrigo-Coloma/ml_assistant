@@ -183,14 +183,14 @@ def eda(eda_feature):
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
             sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,hue=st.session_state.target)
             sns.boxplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target, showfliers = False)           
-        else:
+        elif len(list(st.session_state.raw[eda_feature].unique())) < 15:
             sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature)
             sns.countplot(ax= ax[1],data=st.session_state.raw,y=eda_feature,hue=st.session_state.target)            
     else:
         if is_numeric_dtype(st.session_state.raw[eda_feature]) and len(list(st.session_state.raw[eda_feature].unique())) > 15:
             sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature,bins=50)
             sns.scatterplot(ax= ax[1],data=st.session_state.raw,x=eda_feature,y=st.session_state.target)          
-        else:
+        elif len(list(st.session_state.raw[eda_feature].unique())) < 15:
             sns.histplot(ax= ax[0],data=st.session_state.raw,x=eda_feature)
             sns.boxplot(ax= ax[1],data=st.session_state.raw,y=st.session_state.target,hue=eda_feature, showfliers = False)
     st.pyplot(fig)
@@ -588,7 +588,7 @@ if st.session_state.step == 'EDA and Feature Selection':
                     if st.button('Substitute Outliers',):
                         substitute_outliers(eda_feature,ma,mi)
                         st.rerun()
-                else:
+                elif len(st.session_state.raw[eda_feature]) < 15:
                     coll, colr = st.columns([0.3,0.7])
                     with colr:
                         st.write('Label encoding')
