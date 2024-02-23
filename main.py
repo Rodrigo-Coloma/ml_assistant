@@ -570,9 +570,9 @@ if st.session_state.step == 'EDA and Feature Engineering':
     if "raw" not in st.session_state:
         st.write('Before continuing, please load a dataset to work on')
     else:
+        st.session_state.features = list(st.session_state.raw.columns)
+        st.session_state.features.remove(st.session_state.target)
         with eda_tab:
-            st.session_state.features = list(st.session_state.raw.columns)
-            st.session_state.features.remove(st.session_state.target)
             eda_feature = st.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
             eda(eda_feature)
             col1, col2 = st.columns([0.2,0.8])
@@ -644,8 +644,8 @@ if st.session_state.step == 'EDA and Feature Engineering':
             st.session_state.raw = df.copy()
 
 # Feature selection
-        #if "selected_features" not in st.session_state:
-            #st.session_state.selected_features = st.session_state.features
+        if "selected_features" not in st.session_state:
+            st.session_state.selected_features = st.session_state.features
         st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
