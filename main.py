@@ -592,11 +592,13 @@ if st.session_state.step == 'EDA and Feature Selection':
                     coll, colr = st.columns([0.3,0.7])
                     with colr:
                         st.write('Label encoding')
-                        category_importance = st.multiselect('Choose the categories to be label encoded, the order in which you choose the categories will represent their value when enconded. All non selected categories will be enconded as 0', st.session_state.raw[eda_feature].unique())
+                        category_importance = st.multiselect('Choose the categories to be label encoded, the order in which you choose the categories will represent their value when encoded. All non selected categories will be enconded as 0', st.session_state.raw[eda_feature].unique())
                         if st.button('Label encode',type='primary'):
                             label_encode(eda_feature,category_importance)
                     with coll:
                         st.dataframe({category: value + 1  for value, category in enumerate(category_importance)})
+            st.markdown('''*Any categorical feature with less than 15 categories that is not label enconded,
+                                 will be automatically One Hot Encoded when filter and transform is pressed''')
                 
         with table_tab:
             st.dataframe(st.session_state.raw)
