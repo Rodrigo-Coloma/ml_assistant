@@ -123,7 +123,7 @@ def load_project(project_name,user):
                                                 pr.CreatedAt AS created_at
                                              FROM tested_models tm JOIN projects pr
                                                 ON tm.Project = pr.ProjectName
-                                             WHERE pr.Owner = '{st.session_state.username}'
+                                             WHERE tm.Owner = '{st.session_state.username}'
                                                 AND tm.Project = '{project_name}';''',
                                             st.session_state.connection)
     try:
@@ -144,7 +144,7 @@ def load_project(project_name,user):
                 except:
                     st.session_state.step = 'Model Selection'
             except:
-                st.session_state.step = 'EDA and Feature Selection'
+                st.session_state.step = 'EDA and Feature Engineering'
         except:
             st.session_state.step = 'Data Loading' 
     st.rerun()
@@ -450,7 +450,8 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
                                                 Features,
                                                 Hyperparameters,
                                                 Project,
-                                                CreatedAt)
+                                                CreatedAt,
+                                                Owner)
                                     VALUES('{upload_df.loc[0,'name']}',
                                                 '{upload_df.loc[0,'method'].split('.')[-1].split(' ')[-1].strip('()')}',
                                                 '{st.session_state.approach}',
@@ -469,7 +470,8 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
                                                 '{str(upload_df.loc[0,'features']).replace("'",'"')}',
                                                 '{str(upload_df.loc[0,'hyperparameters']).replace("'",'"')}',
                                                 '{st.session_state.project}',
-                                                CURRENT_TIMESTAMP);''')
+                                                CURRENT_TIMESTAMP,
+                                                '{st.session_state.username}');''')
         st.session_state.connection.commit()
         if "my_models" not in st.session_state:
             st.session_state.my_models = model_df
@@ -587,7 +589,7 @@ if st.session_state.step == 'EDA and Feature Engineering':
             with col1:
                 st.dataframe(st.session_state.raw[[eda_feature]].describe())
             with col2:
-                if len(st.session_state.raw[eda_feature]) > 15 and st.session_state.raw[eda_feature].dtype != 'object':
+                if len(st.session_state.raw[eda_feature].unique()) > 15 and st.session_state.raw[eda_feature].dtype != 'object':
                     mi = st.number_input('Minimum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].min())
                     ma = st.number_input('Maximum',st.session_state.raw[eda_feature].min(),st.session_state.raw[eda_feature].max(),st.session_state.raw[eda_feature].max())
                     if st.button('Eliminate Outliers', type='primary'):
@@ -596,8 +598,8 @@ if st.session_state.step == 'EDA and Feature Engineering':
                     if st.button('Substitute Outliers',):
                         substitute_outliers(eda_feature,ma,mi)
                         st.rerun()
-                elif len(st.session_state.raw[eda_feature]) < 15:
-                    coll, colr = st.columns([0.3,0.7])
+                elif len(st.session_state.raw[eda_feature].unique()) < 15:
+                    coll, colr = st.columns([0.25,0.75])
                     with colr:
                         st.write('Label encoding')
                         category_importance = st.multiselect('Choose the categories to be label encoded, the order in which you choose the categories will represent their value when encoded. All non selected categories will be enconded as 0', st.session_state.raw[eda_feature].unique())
