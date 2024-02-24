@@ -326,12 +326,12 @@ def model_testing(data,target, approach, models):
 # Grid search function
 def grid_search(test_model, models, data, complexity, approach, scaler, dimensionality_reduction, dimensions):
     i = models.index[models['model'] == test_model].to_list()[0]
-    test_model_df = models.loc[models['model'] == test_model,:]
+    st.session_state.test_model_df = models.loc[models['model'] == test_model,:]
     exec(models.loc[i,'import'])
     try:
-        model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1)")
+        model = eval(f"{list(st.session_state.test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}(n_jobs=-1)")
     except:
-        model = eval(f"{list(test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}()")
+        model = eval(f"{list(st.session_state.test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}()")
     hyperparams = str(inspect.signature(model.__init__))
     hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')]
     response = st.session_state.client.chat.completions.create(
@@ -361,7 +361,7 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         presence_penalty=0
         )
     param_grid = eval(response.choices[0].message.content.split('grid":')[-1].strip('}'))
-    st.write(param_grid)
+    #st.write(param_grid)
 
     param_grid2 = param_grid.copy()
     for key in param_grid.keys():
@@ -373,9 +373,10 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         y = pd.get_dummies(data[st.session_state.target], drop_first=True, prefix=st.session_state.target)
     else:
         y = data[st.session_state.target]
-    st.write(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
-    st.text(hyperparams)
-    test_model_df.loc[i,'scaler'] = scaler
+    #st.write(f"{list(test_model_df['method'])[0].split('.')[-1].strip('()')}()")
+    #st.text(hyperparams)
+    st.session_state.test_model_df.loc[i,'scaler'] = scaler
+    st.session_state.test_model_df.loc[i,'dimensionality_reduction'] = f'{dimensionality_reduction}: {dimensions} dimensions'
     start = time.time()
     if scaler is not None:
         scaler = eval(scaler + '()')
@@ -392,15 +393,15 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
     except:
         grid_search = GridSearchCV(model, param_grid2, cv=3, n_jobs=-1)#,error_score='raise')
         grid_search.fit(X,y)
-    st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
+    #st.write(f"Best Parameters: {grid_search.best_params_} Best Score: {grid_search.best_score_} Execution time: {time.time() - start}")
     best_model = grid_search.best_estimator_
     X_train, X_test, y_train, y_test = train_test_split(X,y,random_state=42, test_size=0.2)
     best_model.fit(X_train,y_train)
     if st.session_state.approach == 'classifier':
-        test_model_df.loc[i,'accuracy'] = best_model.score(X_test, y_test)
+        st.session_state.test_model_df.loc[i,'accuracy'] = best_model.score(X_test, y_test)
         models.loc[i,'precision'], models.loc[i,'recall'], models.loc[i,'f1'], x = precision_recall_fscore_support(y_test,best_model.predict(X_test),average='weighted')  
         try:
-            test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
+            st.session_state.test_model_df.loc[i,'AUC'] = roc_auc_score(y_test,best_model.predict_proba(X_test)[:, 1])
             fpr, tpr, thresholds = roc_curve(y_test, best_model.predict_proba(X_test)[:, 1])
             fig = plt.figure()
             plt.plot(fpr, tpr, label=models.loc[i,'model'])
@@ -413,13 +414,11 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         except:
             pass   
     else:
-        test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
-        test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
-        test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,best_model.predict(X_test))
-    st.dataframe(test_model_df)
+        st.session_state.test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
+        st.session_state.test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
+        st.session_state.test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,best_model.predict(X_test))
     
-
-    return best_model, test_model_df
+    return best_model, st.session_state.test_model_df
 # Saving models
 def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
     model_df['name'] = model_name.replace(' ','_')
@@ -482,7 +481,6 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
 # Header
 st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
 
-
 # Create the connection with the database and OpenAI
 if "connetion" not in st.session_state:    
     st.session_state.connection = sqlite_connection()
@@ -490,7 +488,9 @@ if 'client' not in st.session_state:
     gpt_connect()
 
 # Create folders if necessary
-folder_management()
+if 'folders' not in st.session_state:
+    folder_management()
+    st.session_state.folders = True
 
 # We choose the step (page) to work on
 if "step" not in st.session_state:
@@ -522,10 +522,12 @@ if st.session_state.step == 'Projects':
     if "username" not in st.session_state:
         st.write('Please login to be able to manage your projects')
     else:
+        
         with create_tab:
             st.session_state.project = st.text_input('Project Name').replace(' ','_')
             if st.button('Create', type='primary'):
                 create_project(st.session_state.project, st.session_state.username)
+        
         with load_tab:
             st.dataframe(st.session_state.projects_df)
             st.session_state.project = st.selectbox('Select Project', list(st.session_state.projects_df['ProjectName']))
@@ -535,7 +537,13 @@ if st.session_state.step == 'Projects':
                 st.write(st.session_state.project, st.session_state.username)
                 delete_project(st.session_state.project, st.session_state.username)
 
-    
+if 'columns_to show' not in st.session_state and 'approach' in st.session_state and 'target' in st.session_state:
+    st.session_state.columns_to_show = ['model', 'method', 'scaler', 'dimensionality_reduction']
+    if st.session_state.approach == 'regressor':
+        st.session_state.columns_to_show += ['rmse', 'r2_score', 'explained_variance', 'training_time']
+    elif st.session_state.approach == 'classifier':
+        st.session_state.columns_to_show += ['AUC', 'accuracy', 'recall', 'precision', 'f1', 'training_time']
+
 #Data loading
 if st.session_state.step == 'Data Loading':
     if "project" not in st.session_state:
@@ -638,16 +646,15 @@ if st.session_state.step == 'EDA and Feature Engineering':
                     exec(code)
                     st.session_state.execution = code
                 except:
-                    st.write('Your code could not be executed please, check it for errors')
-                    time.sleep(2)
+                    st.write('Your code could not be executed please, check it for errors') 
+                    time.sleep(60)
                 st.rerun()
             st.session_state.raw = df.copy()
 
 # Feature selection
         if "selected_features" not in st.session_state:
-            st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features)
-        else:
-            st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
+            st.session_state.selected_features = st.session_state.features.copy()
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
 
@@ -680,14 +687,19 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
     complexity = st.sidebar.select_slider('Grid complexity', ['extremely simple', 'very simple', 'simple', 'complex', 'very complex', 'extremely complex'],)
     if st.sidebar.button('Gridsearch'):
         st.session_state.trained_model, st.session_state.test_model_df = grid_search(test_model,st.session_state.models, st.session_state.data, complexity, st.session_state.approach, scaler, dimensionality_reduction,dimensions)
+    st.dataframe(st.session_state.test_model_df[st.session_state.columns_to_show])
+
+    
     if "test_model_df" in st.session_state:
         model_name = st.text_input('model name')
         if st.button('Save model'):
             save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features, dimensionality_reduction, dimensions)
     if st.checkbox('My models', value = True) and "my_models" in st.session_state:
-        st.dataframe(st.session_state.my_models)
+        st.dataframe(st.session_state.my_models[['name'] + st.session_state.columns_to_show])
     if st.checkbox('Show recommended models', value=True):    
-        st.dataframe(st.session_state.models)
+        columns = st.session_state.columns_to_show.copy()
+        columns.remove('dimensionality_reduction')
+        st.dataframe(st.session_state.models[columns])
 
 # ChatBot Assistant
 if st.session_state.step == "ChatBot Assistant" and "raw" in st.session_state:
