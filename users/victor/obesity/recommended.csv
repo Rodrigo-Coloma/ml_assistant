@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Classifier,RandomForestClassifier,,from sklearn.ensemble import RandomForestClassifier,,,,,0.8901734104046243,0.8901734104046243,0.8909305065205296,0.8901155257726127,0.39844489097595215
+Gradient Boosting Classifier,GradientBoostingClassifier,,from sklearn.ensemble import GradientBoostingClassifier,,,,,0.904383429672447,0.904383429672447,0.9045533407295141,0.9044497558170499,13.522027969360352
+AdaBoost Classifier,AdaBoostClassifier,,from sklearn.ensemble import AdaBoostClassifier,,,,,0.4328034682080925,0.4328034682080925,0.31131519672211194,0.3275937442202657,1.166095495223999
+Decision Tree Classifier,DecisionTreeClassifier,,from sklearn.tree import DecisionTreeClassifier,,,,,0.8451348747591522,0.8451348747591522,0.8457764066394747,0.8454121882671015,0.09962892532348633
+K-Nearest Neighbors (KNN) Classifier,KNeighborsClassifier,StandardScaler,from sklearn.neighbors import KNeighborsClassifier,,,,,0.7350674373795761,0.7350674373795761,0.7315145902442372,0.7316707419573878,0.009195089340209961
+Support Vector Machine (SVM) Classifier,SVC,StandardScaler,from sklearn.svm import SVC,,,,,0.8559730250481695,0.8559730250481695,0.8565082471813422,0.8561479090823736,1.9775302410125732
+Logistic Regression,LogisticRegression,StandardScaler,from sklearn.linear_model import LogisticRegression,,,,,0.865606936416185,0.865606936416185,0.8648317385661447,0.8649915666436002,5.301092863082886

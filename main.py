@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import sqlite3 as lite
 import seaborn as sns
 import numpy as np
-import pickle
+import shutil
 import umap
 import inspect
 import json
@@ -67,15 +67,20 @@ def user_create(username,password, password_confirm):
         st.rerun()
 
 def user_login(username,password):
-    if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
-        st.session_state.username = username
-        st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
-        if username not in os.listdir('./users/'):
-            os.mkdir(f'./users/{username}')
-        st.session_state.step = 'Projects'
-        st.rerun()
-    else:
-        st.write('Incorrect username or password')
+    try:
+        if list(st.session_state.users_df.loc[st.session_state.users_df['Username'] == username,:]['Password'])[0] == password:
+            st.session_state.username = username
+            st.session_state.projects_df = pd.read_sql(f"SELECT * FROM projects WHERE owner = '{st.session_state.username}'", st.session_state.connection)
+            if username not in os.listdir('./users/'):
+                os.mkdir(f'./users/{username}')
+            st.session_state.step = 'Projects'
+        else:
+            st.write('Incorrect username or password')
+            time.sleep(2)
+    except:
+        st.write('Username does not exist')
+        time.sleep(2)
+    st.rerun()
 
 #Project creation
 def create_project(project_name,user):
@@ -136,18 +141,25 @@ def load_project(project_name,user):
             st.session_state.approach = st.session_state.projects_df.loc[st.session_state.projects_df['ProjectName'] == project_name,'Approach'].reset_index(drop=True)[0]
             try:
                 st.session_state.data = pd.read_csv(f'./users/{user}/{project_name}/data.csv').iloc[:,1:] 
-                st.session_state.selected_features = list(st.session_state.my_models['features'])[-1].strip(']').strip('[')
-                st.session_state.selected_features = [feature.strip('\"') for feature in st.session_state.selected_features.split(', ')]
                 try:
+                    st.session_state.selected_features = list(st.session_state.my_models['features'])[0].strip(']').strip('[')
+                    st.session_state.selected_features = [feature.strip('\"') for feature in st.session_state.selected_features.split(', ')]
                     st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv') 
                     st.session_state.step = 'Model Testing'
                 except:
-                    st.session_state.step = 'Model Selection'
+                    try:
+                        st.session_state.features = list(st.session_state.raw.columns)
+                        st.session_state.features.remove(st.session_state.target)
+                        st.session_state.selected_features = st.session_state.features.copy()
+                        st.session_state.models = pd.read_csv(f'./users/{user}/{project_name}/recommended.csv') 
+                        st.session_state.step = 'Model Testing'
+                    except:
+                        st.session_state.step = 'Model Selection'
             except:
                 st.session_state.step = 'EDA and Feature Engineering'
         except:
             st.session_state.step = 'Data Loading' 
-    st.rerun()
+        st.rerun()
 
 # Project Update
 def update_project():
@@ -198,7 +210,7 @@ def eda(eda_feature):
 #Correlations heatmap
 def correlations_heatmap():  
     fig = plt.figure(figsize=(16, 8))
-    heatmap = sns.heatmap(st.session_state.raw.select_dtypes(exclude= ['object']).corr(), vmin=-1, vmax=1, annot=True)
+    heatmap = sns.heatmap(st.session_state.raw.select_dtypes(exclude= ['object']).iloc[:,:min(12,len(st.session_state.raw.select_dtypes(exclude= ['object']).columns))].corr(), vmin=-1, vmax=1, annot=True)
     heatmap.set_title('Correlation Heatmap', fontdict={'fontsize':12}, pad=12)
     st.pyplot(fig)
 
@@ -232,6 +244,7 @@ def filter_transform(df,selected_features,target):
         st.session_state.data = pd.concat([st.session_state.data, dummies_df],axis=1).drop(feature, axis=1)   
     st.session_state.data = pd.concat([st.session_state.data.select_dtypes(exclude=['object']),df[target]], axis=1).dropna()
     st.session_state.data.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/data.csv')
+    st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
     st.session_state.step = 'Model Selection'
     st.rerun()
 
@@ -240,13 +253,13 @@ def model_selection(data,target):
     while True:
         completion = st.session_state.client.chat.completions.create(
             model="gpt-3.5-turbo",
-            temperature= 0.4,
+            temperature= 1.2,
             response_format={ "type": "json_object" },
             messages=[{"role": "system", "content": f"For the given dataset choose the top 7 s models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                     {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the top 7 models to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
-                        recomended scaler if any for the model and dataset, and "import" the python script used to import the required final method from the library.
+                        recomended scaler if any for the given model, and "import" the python script used to import the required final method from the library.
                         ''' + '''The resulting JSON object should be in this format: [{"model":"string","method":"string","scaler": "string","import": "string"}].\n\n
                         The dataset:\n''' +
                         f'''{str(data.head(100))}\n\n
@@ -260,7 +273,7 @@ def model_selection(data,target):
 #Running every recommended model
 def model_testing(data,target, approach, models):
     st.set_option('deprecation.showPyplotGlobalUse', False)
-    X= data[data.columns.drop(target)]
+    X= data.drop(target, axis = 1)
     if approach == 'classifier' and len(data[target].unique()) == 2 :
         y = pd.get_dummies(data[target],drop_first=True)
     else:
@@ -324,7 +337,7 @@ def model_testing(data,target, approach, models):
     st.rerun()
 
 # Grid search function
-def grid_search(test_model, models, data, complexity, approach, scaler, dimensionality_reduction, dimensions):
+def grid_search(test_model, models, data, run_time, approach, scaler, dimensionality_reduction, dimensions):
     i = models.index[models['model'] == test_model].to_list()[0]
     st.session_state.test_model_df = models.loc[models['model'] == test_model,:]
     exec(models.loc[i,'import'])
@@ -334,6 +347,8 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         model = eval(f"{list(st.session_state.test_model_df['method'])[0].split('.')[-1].split(' ')[-1].strip('()')}()")
     hyperparams = str(inspect.signature(model.__init__))
     hyperparams = [h.split('=')[0] for h in hyperparams.split(', ')]
+    comp_time_dic= {'very low': 'extremely simple', 'low': 'very simple', 'medium': 'simple', 'high': 'complex', 'very high': 'very complex'}
+    complexity = comp_time_dic[run_time]
     response = st.session_state.client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -414,74 +429,97 @@ def grid_search(test_model, models, data, complexity, approach, scaler, dimensio
         except:
             pass   
     else:
-        st.session_state.test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,best_model.predict(X_test),squared=False)
-        st.session_state.test_model_df.loc[i,'r2_score'] = r2_score(y_test,best_model.predict(X_test))
-        st.session_state.test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,best_model.predict(X_test))
+        y_pred = best_model.predict(X_test)
+        st.session_state.test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,y_pred,squared=False)
+        st.session_state.test_model_df.loc[i,'r2_score'] = r2_score(y_test,y_pred)
+        st.session_state.test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,y_pred)
+        fig = plt.figure()
+        plt.scatter(y_test, y_pred)
+        p1 = max(max(y_pred), max(y_test))
+        p2 = min(min(y_pred), min(y_test))
+        plt.plot([p1, p2], [p1, p2], 'b-')
+        plt.title('Real vs Predicted values')
+        plt.xlabel(f'Real Values for {st.session_state.target}')
+        plt.ylabel(f'Predicted Values for {st.session_state.target}')
+        st.pyplot(fig)
     
+
+
     return best_model, st.session_state.test_model_df
+
 # Saving models
 def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
-    model_df['name'] = model_name.replace(' ','_')
-    model_df['hyperparameters'] = str(trained_model.get_params())
-    model_df['features'] = str(selected_features)
-    model_df['dimensionality_reduction'] = f'{dimensionality_reduction}: {dimensions} dimensions'
-    model_df = model_df.reset_index(drop=True)
-    buffer = StringIO()
-    model_df.info(buf=buffer)
-    s = buffer.getvalue()
-    upload_df = model_df.fillna('NULL')
-    try:
-        st.session_state.cursor.execute(f'''INSERT INTO tested_models(
-                                                Name,
-                                                Model,
-                                                Approach,
-                                                Import,
-                                                Scaler,
-                                                DimensionalityReduction,
-                                                Rmse,
-                                                R2Score,
-                                                ExplainedVariance,
-                                                AUC,
-                                                Accuracy,
-                                                Recall,
-                                                Precision,
-                                                F1,
-                                                TrainingTime,
-                                                Features,
-                                                Hyperparameters,
-                                                Project,
-                                                CreatedAt,
-                                                Owner)
-                                    VALUES('{upload_df.loc[0,'name']}',
-                                                '{upload_df.loc[0,'method'].split('.')[-1].split(' ')[-1].strip('()')}',
-                                                '{st.session_state.approach}',
-                                                '{upload_df.loc[0,'import']}',
-                                                '{upload_df.loc[0,'scaler']}',
-                                                '{upload_df.loc[0,'dimensionality_reduction']}',
-                                                {upload_df.loc[0,'rmse']},
-                                                {upload_df.loc[0,'r2_score']},
-                                                {upload_df.loc[0,'explained_variance']},
-                                                {upload_df.loc[0,'AUC']},
-                                                {upload_df.loc[0,'accuracy']},
-                                                {upload_df.loc[0,'recall']},
-                                                {upload_df.loc[0,'precision']},
-                                                {upload_df.loc[0,'f1']},
-                                                {upload_df.loc[0,'training_time']},
-                                                '{str(upload_df.loc[0,'features']).replace("'",'"')}',
-                                                '{str(upload_df.loc[0,'hyperparameters']).replace("'",'"')}',
-                                                '{st.session_state.project}',
-                                                CURRENT_TIMESTAMP,
-                                                '{st.session_state.username}');''')
-        st.session_state.connection.commit()
-        if "my_models" not in st.session_state:
-            st.session_state.my_models = model_df
-        else:
-            st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
-    except:
-        st.write('Model name already in use please choose another one')
+    if "my_models" in st.session_state and model_name in list(st.session_state.my_models):
+        st.write('Name already in use, please choose a new one')
+    else:
+        model_df['name'] = model_name.replace(' ','_')
+        model_df['hyperparameters'] = str(trained_model.get_params())
+        model_df['features'] = str(selected_features)
+        model_df['dimensionality_reduction'] = f'{dimensionality_reduction}: {dimensions} dimensions'
+        model_df = model_df.reset_index(drop=True)
+        buffer = StringIO()
+        model_df.info(buf=buffer)
+        s = buffer.getvalue()
+        upload_df = model_df.fillna('NULL')
+        try:
+            st.session_state.cursor.execute(f'''INSERT INTO tested_models(
+                                                    Name,
+                                                    Model,
+                                                    Approach,
+                                                    Import,
+                                                    Scaler,
+                                                    DimensionalityReduction,
+                                                    Rmse,
+                                                    R2Score,
+                                                    ExplainedVariance,
+                                                    AUC,
+                                                    Accuracy,
+                                                    Recall,
+                                                    Precision,
+                                                    F1,
+                                                    TrainingTime,
+                                                    Features,
+                                                    Hyperparameters,
+                                                    Project,
+                                                    CreatedAt,
+                                                    Owner)
+                                        VALUES('{upload_df.loc[0,'name']}',
+                                                    '{upload_df.loc[0,'method'].split('.')[-1].split(' ')[-1].strip('()')}',
+                                                    '{st.session_state.approach}',
+                                                    '{upload_df.loc[0,'import']}',
+                                                    '{upload_df.loc[0,'scaler']}',
+                                                    '{upload_df.loc[0,'dimensionality_reduction']}',
+                                                    {upload_df.loc[0,'rmse']},
+                                                    {upload_df.loc[0,'r2_score']},
+                                                    {upload_df.loc[0,'explained_variance']},
+                                                    {upload_df.loc[0,'AUC']},
+                                                    {upload_df.loc[0,'accuracy']},
+                                                    {upload_df.loc[0,'recall']},
+                                                    {upload_df.loc[0,'precision']},
+                                                    {upload_df.loc[0,'f1']},
+                                                    {upload_df.loc[0,'training_time']},
+                                                    '{str(upload_df.loc[0,'features']).replace("'",'"')}',
+                                                    '{str(upload_df.loc[0,'hyperparameters']).replace("'",'"')}',
+                                                    '{st.session_state.project}',
+                                                    CURRENT_TIMESTAMP,
+                                                    '{st.session_state.username}');''')
+            st.session_state.connection.commit()
+            if "my_models" not in st.session_state:
+                st.session_state.my_models = model_df
+            else:
+                st.session_state.my_models = pd.concat([st.session_state.my_models, model_df],axis=0).reset_index(drop=True)
+        except:
+            st.write('Model name already in use please choose another one')
+
+# Data preparation for download
+def data_preparation():
+    st.session_state.my_models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/my_models.csv', index = False, header=True)
+    shutil.make_archive(f'./zip/{st.session_state.username}-{st.session_state.project}', 'zip', f'./users/{st.session_state.username}/{st.session_state.project}/')
+
+
 
 # Header
-st.components.v1.html('<h2 style="text-align: center;">A.I.A.M.A.</h2>', width=None, height=50, scrolling=False)
+st.components.v1.html('<h2 style="text-align: center;">&#128202 LearnLab AI &#128640 </h2>', width=None, height=50, scrolling=False)
 
 # Create the connection with the database and OpenAI
 if "connetion" not in st.session_state:    
@@ -520,7 +558,7 @@ if st.session_state.step == 'User Login':
 
 # Project Management
 if st.session_state.step == 'Projects':
-    create_tab, load_tab = st.tabs(['Create','Load'])
+    create_tab, load_tab, export_tab = st.tabs(['Create','Load','Export'])
     if "username" not in st.session_state:
         st.write('Please login to be able to manage your projects')
     else:
@@ -539,8 +577,19 @@ if st.session_state.step == 'Projects':
                 st.write(st.session_state.project, st.session_state.username)
                 delete_project(st.session_state.project, st.session_state.username)
 
+        with export_tab:
+            if "my_models" not in st.session_state:
+                st.write('Please perform previous steps before exporting your project')
+            else:
+                st.dataframe(st.session_state.my_models)
+                if st.button('Prepare Data'):
+                    data_preparation()
+                if st.download_button('Download Project', f'./zip/{st.session_state.username}-{st.session_state.project}.zip', file_name=f'{st.session_state.project}.zip'):
+                    st.write('Project downloaded')
+
+
 if 'columns_to show' not in st.session_state and 'approach' in st.session_state and 'target' in st.session_state:
-    st.session_state.columns_to_show = ['model', 'method', 'scaler', 'dimensionality_reduction']
+    st.session_state.columns_to_show = ['model', 'scaler', 'dimensionality_reduction']
     if st.session_state.approach == 'regressor':
         st.session_state.columns_to_show += ['rmse', 'r2_score', 'explained_variance', 'training_time']
     elif st.session_state.approach == 'classifier':
@@ -564,9 +613,9 @@ if st.session_state.step == 'Data Loading':
             if 'approach' not in st.session_state:
                 st.session_state.approach = 'classiffier'
             st.session_state.approach = st.sidebar.selectbox('Approach', ['classifier', 'regressor'],1 if st.session_state.approach == 'regressor' else 0, placeholder="Choose the target")
-            st.dataframe(st.session_state.raw)
+            st.dataframe(st.session_state.raw, hide_index = True)
             st.dataframe(pd.DataFrame({"name": st.session_state.raw.columns, "non-nulls": len(st.session_state.raw)-st.session_state.raw.isnull().sum().values,
-                                "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }))   
+                                "nulls": st.session_state.raw.isnull().sum().values, "type": st.session_state.raw.dtypes.values, "unique": [len(st.session_state.raw[col].unique()) for col in st.session_state.raw.columns] }), hide_index = True)   
             if st.sidebar.button('Next',type='primary'):
                 st.session_state.target = target
                 update_project()
@@ -574,7 +623,8 @@ if st.session_state.step == 'Data Loading':
                 st.rerun()        
         else:
             st.markdown('#### Load a file to work on')
-# EDA
+
+# EDA and Feature engineering
 if st.session_state.step == 'EDA and Feature Engineering':
     eda_tab, table_tab, corr_tab, fe_tab, data_tab = st.tabs(['EDA','Source Table','Correlations', 'Feature Engineering', 'Clean Data'])
     if "raw" not in st.session_state:
@@ -582,8 +632,17 @@ if st.session_state.step == 'EDA and Feature Engineering':
     else:
         st.session_state.features = list(st.session_state.raw.columns)
         st.session_state.features.remove(st.session_state.target)
+        
+# Feature selection
+        if "selected_features" not in st.session_state:
+            st.session_state.selected_features = st.session_state.features.copy()
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
+        if st.sidebar.button('Filter and transform', type='primary'):
+            st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
+
+# EDA      
         with eda_tab:
-            eda_feature = st.selectbox('EDA', st.session_state.raw.columns, placeholder="Choose a feature")
+            eda_feature = st.selectbox('EDA', st.session_state.selected_features, placeholder="Choose a feature")
             eda(eda_feature)
             col1, col2 = st.columns([0.2,0.8])
             with col1:
@@ -653,25 +712,20 @@ if st.session_state.step == 'EDA and Feature Engineering':
                 st.rerun()
             st.session_state.raw = df.copy()
 
-# Feature selection
-        if "selected_features" not in st.session_state:
-            st.session_state.selected_features = st.session_state.features.copy()
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
-        if st.sidebar.button('Filter and transform', type='primary'):
-            st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
-
 # model recommendation   
 if st.session_state.step == 'Model Selection':
     if 'data' not in st.session_state:
         st.write('Before continuing, please select features and filter data.')
     else:
         if st.sidebar.button('Recomended models'):
-            st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
+            with st.spinner('Please wait while our assistant finds the best models'):
+                st.session_state.models = model_selection(st.session_state.data, st.session_state.target)
 
 # model testing
         if "models" in st.session_state:
             if st.sidebar.button('Test Models',type='primary'):
-                model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
+                with st.spinner('Please wait while the models are being tested'):
+                    model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
         if "models" in st.session_state:
             if st.checkbox('Show recommended models', value=True):    
                 st.dataframe(st.session_state.models)
@@ -686,99 +740,104 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         dimensions  = st.sidebar.slider('Number of dimensions', 2, len(st.session_state.data.columns),2)
     else:
         dimensions = len(st.session_state.data.columns)
-    complexity = st.sidebar.select_slider('Grid complexity', ['extremely simple', 'very simple', 'simple', 'complex', 'very complex', 'extremely complex'],)
+    complexity = st.sidebar.select_slider('Grid Run time', ['very low', 'low', 'medium', 'high', 'very high'],)
     if st.sidebar.button('Gridsearch'):
-        st.session_state.trained_model, st.session_state.test_model_df = grid_search(test_model,st.session_state.models, st.session_state.data, complexity, st.session_state.approach, scaler, dimensionality_reduction,dimensions)
-    st.dataframe(st.session_state.test_model_df[st.session_state.columns_to_show])
+        with st.spinner('Please be patient, GridSearch can take a while'):
+            st.session_state.trained_model, st.session_state.test_model_df = grid_search(test_model,st.session_state.models, st.session_state.data, complexity, st.session_state.approach, scaler, dimensionality_reduction,dimensions)
+        st.dataframe(st.session_state.test_model_df[st.session_state.columns_to_show])
 
-    
+ # Tested model df   
     if "test_model_df" in st.session_state:
-        model_name = st.text_input('model name')
+        model_name = st.text_input('Model Name')
         if st.button('Save model'):
             save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features, dimensionality_reduction, dimensions)
     if st.checkbox('My models', value = True) and "my_models" in st.session_state:
-        st.dataframe(st.session_state.my_models[['name'] + st.session_state.columns_to_show])
+        st.dataframe(st.session_state.my_models[['name'] + st.session_state.columns_to_show], hide_index = True)
     if st.checkbox('Show recommended models', value=True):    
         columns = st.session_state.columns_to_show.copy()
         columns.remove('dimensionality_reduction')
-        st.dataframe(st.session_state.models[columns])
+        st.dataframe(st.session_state.models[columns], hide_index = True)
 
 # ChatBot Assistant
-if st.session_state.step == "ChatBot Assistant" and "raw" in st.session_state:
-    assistant_id = "asst_bJ4RIPQgYL4pINAvQOYyjH4h"
+if st.session_state.step == "ChatBot Assistant":
+    if "raw" not in st.session_state:
+        st.write('Please load a dataset so the assistant can help you with it')
+    else:
+        assistant_id = "asst_bJ4RIPQgYL4pINAvQOYyjH4h"
 
-    if "start_chat" not in st.session_state:
-        st.session_state.start_chat = False
-    if "thread_id" not in st.session_state:
-        st.session_state.thread_id = None
+        if "start_chat" not in st.session_state:
+            st.session_state.start_chat = False
+        if "thread_id" not in st.session_state:
+            st.session_state.thread_id = None
 
-    if st.sidebar.button('Start Chat', type='primary'):
-        st.session_state.start_chat = True
-        thread = st.session_state.client.beta.threads.create()
-        st.session_state.thread_id = thread.id
-        
-    if st.sidebar.button('Clear Chat'):
-        st.session_state.start_chat = False
-        st.session_state.thread_id = None
-        st.session_state.messages = []
-
-    if st.session_state.start_chat:
-        if "openai_model" not in st.session_state:
-            st.session_state.openai_model = "gpt-3.5-turbo"
-        if "messages" not in st.session_state:
+        if st.sidebar.button('Start Chat', type='primary'):
+            st.session_state.start_chat = True
+            thread = st.session_state.client.beta.threads.create()
+            st.session_state.thread_id = thread.id
+            
+        if st.sidebar.button('Clear Chat'):
+            st.session_state.start_chat = False
+            st.session_state.thread_id = None
             st.session_state.messages = []
 
-        st.session_state.client.beta.threads.messages.create(
-                    thread_id= st.session_state.thread_id,
-                    role= 'user',
-                    content = f''' These are th first 50 rows of a dataframe with a total of {len(st.session_state.raw.index)} rows:/n
-                                {str(st.session_state.raw.head(50))}/n
-                                I am trying to create a {st.session_state.approach} model for {st.session_state.target}/n
-                                Can you help me out?'''
-                    )
-        
-        for message in st.session_state.messages:
-            with st.chat_message(message['role']):
-                st.markdown(message['content'])
-
-        if prompt := st.chat_input('Can you help me with this dataset?'):
-
-            st.session_state.messages.append({'role' : 'user', 'content': prompt})
-            with st.chat_message('user'):
-                st.markdown(prompt)
+        if st.session_state.start_chat:
+            if "openai_model" not in st.session_state:
+                st.session_state.openai_model = "gpt-3.5-turbo"
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
 
             st.session_state.client.beta.threads.messages.create(
-                    thread_id= st.session_state.thread_id,
-                    role= 'user',
-                    content = prompt
-                    )
-            
-            run = st.session_state.client.beta.threads.runs.create(
-                        thread_id = st.session_state.thread_id,
-                        assistant_id = assistant_id
+                        thread_id= st.session_state.thread_id,
+                        role= 'user',
+                        content = f''' These are th first 50 rows of a dataframe with a total of {len(st.session_state.raw.index)} rows:/n
+                                    {str(st.session_state.raw.head(50))}/n
+                                    I am trying to create a {st.session_state.approach} model for {st.session_state.target}/n
+                                    Can you help me out?'''
                         )
             
-            while run.status != "completed":
-                time.sleep(1)
-                run = st.session_state.client.beta.threads.runs.retrieve(
-                        thread_id = st.session_state.thread_id,
-                        run_id = run.id
+            for message in st.session_state.messages:
+                with st.chat_message(message['role']):
+                    st.markdown(message['content'])
+
+            if prompt := st.chat_input('Can you help me with this dataset?'):
+
+                st.session_state.messages.append({'role' : 'user', 'content': prompt})
+                with st.chat_message('user'):
+                    st.markdown(prompt)
+
+                st.session_state.client.beta.threads.messages.create(
+                        thread_id= st.session_state.thread_id,
+                        role= 'user',
+                        content = prompt
                         )
                 
-            messages = st.session_state.client.beta.threads.messages.list(
-                    thread_id = st.session_state.thread_id
-                    )
+                run = st.session_state.client.beta.threads.runs.create(
+                            thread_id = st.session_state.thread_id,
+                            assistant_id = assistant_id
+                            )
+                
+                while run.status != "completed":
+                    time.sleep(1)
+                    run = st.session_state.client.beta.threads.runs.retrieve(
+                            thread_id = st.session_state.thread_id,
+                            run_id = run.id
+                            )
+                    
+                messages = st.session_state.client.beta.threads.messages.list(
+                        thread_id = st.session_state.thread_id
+                        )
+                
+                #Proccess and display messages
+                assistant_messages_for_run = [
+                    message for message in messages
+                    if message.run_id == run.id and message.role == 'assistant'
+                    ]
             
-            #Proccess and display messages
-            assistant_messages_for_run = [
-                message for message in messages
-                if message.run_id == run.id and message.role == 'assistant'
-                ]
-        
-            for message in assistant_messages_for_run:
-                st.session_state.messages.append({'role': 'assistant', 'content': message.content[0].text.value})
-                with st.chat_message('Assistant'):
-                    st.markdown(message.content[0].text.value)
+                for message in assistant_messages_for_run:
+                    st.session_state.messages.append({'role': 'assistant', 'content': message.content[0].text.value})
+                    with st.chat_message('Assistant'):
+                        st.markdown(message.content[0].text.value)
+
 
 # Signature
 if "project" in st.session_state:

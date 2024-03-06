@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Logistic Regression,linear_model.LogisticRegression,StandardScaler,from sklearn import linear_model,,,,0.8273809523809524,0.7902097902097902,0.7902097902097902,0.7971390311815844,0.785537738123945,0.7536482810974121
+Random Forest,ensemble.RandomForestClassifier,,from sklearn import ensemble,,,,0.841765873015873,0.7832167832167832,0.7832167832167832,0.7826185862330441,0.7825680230288938,0.13173151016235352
+Support Vector Machine,svm.SVC,StandardScaler,from sklearn import svm,,,,,0.8041958041958042,0.8041958041958042,0.815553241085156,0.7988556897647807,0.0070378780364990234
+K-Nearest Neighbors,neighbors.KNeighborsClassifier,StandardScaler,from sklearn import neighbors,,,,0.8217261904761903,0.7972027972027972,0.7972027972027972,0.7989837877478327,0.7948028303057889,0.018121957778930664
+Decision Tree,tree.DecisionTreeClassifier,,from sklearn import tree,,,,,,,,,
+Gradient Boosting,ensemble.GradientBoostingClassifier,,from sklearn import ensemble,,,,0.8106150793650794,0.7622377622377622,0.7622377622377622,0.765117235705471,0.7580179918001215,0.1544806957244873
+Naive Bayes,naive_bayes.GaussianNB,,from sklearn import naive_bayes,,,,,,,,,

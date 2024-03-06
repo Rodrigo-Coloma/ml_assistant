@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Regressor,from sklearn.ensemble import RandomForestRegressor,StandardScaler,from sklearn.ensemble import RandomForestRegressor,649.641067105795,0.9734517043319427,0.9737950375139093,,,,,,2.384514093399048
+Gradient Boosting Regressor,from sklearn.ensemble import GradientBoostingRegressor,MinMaxScaler,from sklearn.ensemble import GradientBoostingRegressor,8185.682059269477,-3.2150181393738224,0.5694778201520524,,,,,,3.8283255100250244
+XGBoost Regressor,from xgboost import XGBRegressor,RobustScaler,from xgboost import XGBRegressor,579.8038328653998,0.9788528489398884,0.978858083826877,,,,,,0.21433043479919434
+Support Vector Regressor,from sklearn.svm import SVR,MinMaxScaler,from sklearn.svm import SVR,4063.7064730277266,-0.0388057983515282,0.07053071281836487,,,,,,96.70351958274841
+K-Nearest Neighbors Regressor,from sklearn.neighbors import KNeighborsRegressor,StandardScaler,from sklearn.neighbors import KNeighborsRegressor,815.5260958035593,0.9581625285925384,0.9581736363463937,,,,,,0.0
+Decision Tree Regressor,from sklearn.tree import DecisionTreeRegressor,No scaler needed,from sklearn.tree import DecisionTreeRegressor,850.5062639589261,0.9544965069116975,0.954496583479771,,,,,,0.3333742618560791
+Linear Regression,from sklearn.linear_model import LinearRegression,StandardScaler,from sklearn.linear_model import LinearRegression,1136.850276307201,0.9186989326952936,0.9187693387276347,,,,,,0.012319564819335938
