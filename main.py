@@ -514,7 +514,7 @@ def save_model(model_name, trained_model, model_df, selected_features,dimensiona
 # Data preparation for download
 def data_preparation():
     st.session_state.my_models.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/my_models.csv', index = False, header=True)
-    shutil.make_archive(f'./zip/{st.session_state.username}-{st.session_state.project}', 'zip', f'./users/{st.session_state.username}/{st.session_state.project}/')
+    shutil.make_archive(f'./zip/{st.session_state.username}-{st.session_state.project}', 'zip', f'./users/{st.session_state.username}/{st.session_state.project}')
 
 
 
@@ -636,7 +636,9 @@ if st.session_state.step == 'EDA and Feature Engineering':
 # Feature selection
         if "selected_features" not in st.session_state:
             st.session_state.selected_features = st.session_state.features.copy()
-        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.selected_features)
+        if "features_to_select" not in st.session_state:
+            st.session_state.features_to_select = st.session_state.selected_features.copy()
+        st.session_state.selected_features = st.sidebar.multiselect('Selected Features',st.session_state.features, st.session_state.features_to_select)
         if st.sidebar.button('Filter and transform', type='primary'):
             st.session_state.data = filter_transform(st.session_state.raw,st.session_state.selected_features,st.session_state.target)
 

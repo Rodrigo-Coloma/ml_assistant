@@ -1,0 +1,11 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Classifier,RandomForestClassifier(),(Not required),from sklearn.ensemble import RandomForestClassifier,,,,,0.8911368015414258,0.8911368015414258,0.8915238800552411,0.8911441347662542,0.38744068145751953
+Gradient Boosting Classifier,GradientBoostingClassifier(),(Not required),from sklearn.ensemble import GradientBoostingClassifier,,,,,0.9039017341040463,0.9039017341040463,0.9040752400132063,0.9039701030429594,13.416264057159424
+AdaBoost Classifier,AdaBoostClassifier(),(Not required),from sklearn.ensemble import AdaBoostClassifier,,,,,0.4328034682080925,0.4328034682080925,0.31131519672211194,0.3275937442202657,1.1537775993347168
+Logistic Regression,LogisticRegression(),StandardScaler(),"from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler",,,,,0.8651252408477842,0.8651252408477842,0.8642844211416431,0.8645100538453626,1.351459264755249
+K-Nearest Neighbors Classifier,KNeighborsClassifier(),StandardScaler(),"from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler",,,,,0.7377167630057804,0.7377167630057804,0.7343149959205695,0.7343574346705654,0.014198541641235352
+Support Vector Machine,SVC(),StandardScaler(),"from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler",,,,,0.859344894026975,0.859344894026975,0.8596996693416703,0.8594981184885246,2.046419858932495
+Decision Tree Classifier,DecisionTreeClassifier(),(Not required),from sklearn.tree import DecisionTreeClassifier,,,,,0.8432080924855492,0.8432080924855492,0.8440142506036052,0.8435794641156772,0.09130096435546875
