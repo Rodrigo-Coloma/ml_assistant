@@ -178,14 +178,17 @@ def delete_project(project,owner):
     
 # Data loading
 def data_loading():
-    if len(separator) > 0:
+    if '.csv' in uploaded_file.name:
+        if len(separator) > 0:
+            st.session_state.raw = pd.read_csv(uploaded_file,sep=separator)
+        else:
+            st.session_state.raw = pd.read_csv(uploaded_file)
+        if st.session_state.raw.columns[0] == 'Unnamed: 0':
+            st.session_state.raw = st.session_state.raw.iloc[:,1:]
+        st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
+        return st.session_state.raw
+    elif '.parquet' in uploaded_file.name:
         st.session_state.raw = pd.read_csv(uploaded_file,sep=separator)
-    else:
-        st.session_state.raw = pd.read_csv(uploaded_file)
-    if st.session_state.raw.columns[0] == 'Unnamed: 0':
-        st.session_state.raw = st.session_state.raw.iloc[:,1:]
-    st.session_state.raw.to_csv(f'./users/{st.session_state.username}/{st.session_state.project}/raw.csv')
-    return st.session_state.raw
         
 #EDA
 def eda(eda_feature):
@@ -253,13 +256,13 @@ def model_selection(data,target):
     while True:
         completion = st.session_state.client.chat.completions.create(
             model="gpt-3.5-turbo",
-            temperature= 1.2,
+            temperature= 1.4,
             response_format={ "type": "json_object" },
             messages=[{"role": "system", "content": f"For the given dataset choose the top 7 s models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                     {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
                         Each child object has four properties named "model", "method","scaler" and "import". The 7 child objects are the top 7 models to create a {st.session_state.approach} for {target}.
                         For each child object assign to the property named "model name" to the models name, "method" to the sklearn library method used to invoke the model, "Scaler" the 
-                        recomended scaler if any for the given model, and "import" the python script used to import the required final method from the library.
+                        recomended scaler, IF ANY, for the given model, and "import" the python script used to import the required final method from the library.
                         ''' + '''The resulting JSON object should be in this format: [{"model":"string","method":"string","scaler": "string","import": "string"}].\n\n
                         The dataset:\n''' +
                         f'''{str(data.head(100))}\n\n
@@ -375,7 +378,12 @@ def grid_search(test_model, models, data, run_time, approach, scaler, dimensiona
         frequency_penalty=0,
         presence_penalty=0
         )
-    param_grid = eval(response.choices[0].message.content.split('grid":')[-1].strip('}'))
+    param_grid = eval(
+        response
+        .choices[0]
+        .message.content
+        .split('grid":')[-1].strip('}')
+        )
     #st.write(param_grid)
 
     param_grid2 = param_grid.copy()
@@ -433,18 +441,18 @@ def grid_search(test_model, models, data, run_time, approach, scaler, dimensiona
         st.session_state.test_model_df.loc[i,'rmse'] = mean_squared_error(y_test,y_pred,squared=False)
         st.session_state.test_model_df.loc[i,'r2_score'] = r2_score(y_test,y_pred)
         st.session_state.test_model_df.loc[i,'explained_variance'] = explained_variance_score(y_test,y_pred)
-        fig = plt.figure()
-        plt.scatter(y_test, y_pred)
+        fig, ax = plt.subplots(nrows=1,ncols=2, figsize=(12,6))
+        ax[0].scatter(y_test, y_pred)
         p1 = max(max(y_pred), max(y_test))
         p2 = min(min(y_pred), min(y_test))
-        plt.plot([p1, p2], [p1, p2], 'b-')
-        plt.title('Real vs Predicted values')
-        plt.xlabel(f'Real Values for {st.session_state.target}')
-        plt.ylabel(f'Predicted Values for {st.session_state.target}')
+        ax[0].plot([p1, p2], [p1, p2], 'b-')
+        ax[0].set_title('Real vs Predicted Values')
+        ax[0].set_xlabel(f'Real Values for {st.session_state.target}')
+        ax[0].set_ylabel(f'Predicted Values for {st.session_state.target}')
+        ax[1].hist(y_pred - y_test, bins=30)
+        ax[1].set_title('Residual Difference')
+        ax[1].set_xlabel(f'Residual Difference for {st.session_state.target}')
         st.pyplot(fig)
-    
-
-
     return best_model, st.session_state.test_model_df
 
 # Saving models
@@ -600,7 +608,7 @@ if st.session_state.step == 'Data Loading':
     if "project" not in st.session_state:
         st.write('Before continuing, please create or load a project')
     else:
-        uploaded_file = st.sidebar.file_uploader('Upload your csv here')
+        uploaded_file = st.sidebar.file_uploader('Upload your csv or parquet here')
         separator = st.sidebar.text_input('Separator',placeholder=',')
         if uploaded_file is not None:
                 st.session_state.raw = data_loading()
