@@ -164,8 +164,10 @@ def load_project(project_name,user):
 # Project Update
 def update_project():
     st.session_state.cursor.execute(f'''UPDATE projects
-                                    SET Target = '{st.session_state.target}', Approach = '{st.session_state.approach}'
-                                    WHERE ProjectName = '{st.session_state.project}';''')
+                                    SET Target = '{st.session_state.target}',
+                                        Approach = '{st.session_state.approach}'
+                                    WHERE ProjectName = '{st.session_state.project}'
+                                        AND Owner = '{st.session_state.username}';''')
     st.session_state.connection.commit()
 
 
@@ -762,7 +764,7 @@ if st.session_state.step == "Model Testing" and "models" in st.session_state:
         if st.button('Save model'):
             save_model(model_name, st.session_state.trained_model, st.session_state.test_model_df, st.session_state.selected_features, dimensionality_reduction, dimensions)
     if st.checkbox('My models', value = True) and "my_models" in st.session_state:
-        st.dataframe(st.session_state.my_models[['name'] + st.session_state.columns_to_show], hide_index = True)
+        st.dataframe(st.session_state.my_models[['name'] + st.session_state.columns_to_show + ['hyperparameters', 'features']], hide_index = True)
     if st.checkbox('Show recommended models', value=True):    
         columns = st.session_state.columns_to_show.copy()
         columns.remove('dimensionality_reduction')
