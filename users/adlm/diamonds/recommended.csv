@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Regressor,RandomForestRegressor,Not Recommended,from sklearn.ensemble import RandomForestRegressor,622.7454610174352,0.9751989439368726,0.9752036126561048,,,,,,2.694254159927368
+Gradient Boosting Regressor,GradientBoostingRegressor,Recommended: StandardScaler,from sklearn.ensemble import GradientBoostingRegressor,851.6576494391545,0.9536148318224182,0.9542380330206941,,,,,,4.785316228866577
+Lasso Regression,Lasso,Recommended: StandardScaler,from sklearn.linear_model import Lasso,1133.1422102685628,0.91788587533386,0.9181813206044996,,,,,,2.437501907348633
+Ridge Regression,Ridge,Recommended: StandardScaler,from sklearn.linear_model import Ridge,1134.027445337632,0.9177575265780279,0.9180529718486674,,,,,,0.01184225082397461
+Support Vector Machine Regressor,SVR,Recommended: StandardScaler,from sklearn.svm import SVR,3103.350628754113,0.38409926013226137,0.4653953858678693,,,,,,55.558698654174805
+K-Nearest Neighbors Regressor,KNeighborsRegressor,Recommended: StandardScaler,from sklearn.neighbors import KNeighborsRegressor,731.7311887378045,0.9657585485628781,0.965891851827463,,,,,,0.004912376403808594
+Decision Tree Regressor,DecisionTreeRegressor,Not Recommended,from sklearn.tree import DecisionTreeRegressor,825.3764466468635,0.9564334494409887,0.9564343745023477,,,,,,0.3632469177246094

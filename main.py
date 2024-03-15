@@ -223,8 +223,8 @@ def eliminate_outliers(feature,ma,mi):
     st.session_state.raw = st.session_state.raw.loc[(st.session_state.raw[feature] > mi) & (st.session_state.raw[feature] < ma)]
 
 def substitute_outliers(feature, ma,mi):
-    st.session_state.raw.loc[st.session_state.raw[feature] < mi] = mi
-    st.session_state.raw.loc[st.session_state.raw[feature] > ma] = ma
+    st.session_state.raw.loc[st.session_state.raw[feature] < mi, feature] = mi
+    st.session_state.raw.loc[st.session_state.raw[feature] > ma, feature] = ma
 
 def label_encode(eda_feature, categories):
     st.session_state.raw.loc[~st.session_state.raw[eda_feature].isin(categories),eda_feature]= 0
@@ -258,7 +258,7 @@ def model_selection(data,target):
     while True:
         completion = st.session_state.client.chat.completions.create(
             model="gpt-3.5-turbo",
-            temperature= 1.4,
+            temperature= 0.6,
             response_format={ "type": "json_object" },
             messages=[{"role": "system", "content": f"For the given dataset choose the top 7 s models to create a {st.session_state.approach} model for {target} as well as the method to instance the model, the recomended scaler if any for each model and the required import"},
                     {"role": "user", "content": f'''Given the dataset below which shows the first 100 rows of a dataset with a total of {len(data.index)}, create a JSON object which enumerates a set of 7 child objects.                       
@@ -459,7 +459,7 @@ def grid_search(test_model, models, data, run_time, approach, scaler, dimensiona
 
 # Saving models
 def save_model(model_name, trained_model, model_df, selected_features,dimensionality_reduction, dimensions):
-    if "my_models" in st.session_state and model_name in list(st.session_state.my_models):
+    if "my_models" in st.session_state and model_name in list(st.session_state.my_models['name']):
         st.write('Name already in use, please choose a new one')
     else:
         model_df['name'] = model_name.replace(' ','_')

@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Regressor,RandomForestRegressor,No Scaler recommended,from sklearn.ensemble import RandomForestRegressor,630.5771593000791,0.9749869774250091,0.9749951382250139,,,,,,2.0536670684814453
+Gradient Boosting Regressor,GradientBoostingRegressor,No Scaler recommended,from sklearn.ensemble import GradientBoostingRegressor,846.1133225829922,0.954965352234254,0.9549778021906384,,,,,,4.877719163894653
+AdaBoost Regressor,AdaBoostRegressor,No Scaler recommended,from sklearn.ensemble import AdaBoostRegressor,1485.3842370569444,0.8612070759892434,0.8665421109443326,,,,,,1.2722384929656982
+Lasso Regression,Lasso,Standard Scaler,from sklearn.linear_model import Lasso,1136.5019976618398,0.91874873888157,0.918751112033749,,,,,,0.8440089225769043
+Ridge Regression,Ridge,Standard Scaler,from sklearn.linear_model import Ridge,1135.1733629007604,0.9189386024249951,0.9189407021878666,,,,,,0.025336742401123047
+Support Vector Regressor,SVR,Standard Scaler,from sklearn.svm import SVR,4228.912507844012,-0.12498596363001102,0.016732157772535228,,,,,,93.10900664329529
+K-Nearest Neighbors Regressor,KNeighborsRegressor,Standard Scaler,from sklearn.neighbors import KNeighborsRegressor,986.9957700630526,0.9387197841336282,0.938831810422113,,,,,,0.00801849365234375
