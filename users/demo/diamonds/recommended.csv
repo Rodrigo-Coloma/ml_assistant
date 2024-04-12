@@ -1,0 +1,8 @@
+model,method,scaler,import,rmse,r2_score,explained_variance,AUC,accuracy,recall,precision,f1,training_time
+Random Forest Regressor,RandomForestRegressor,,from sklearn.ensemble import RandomForestRegressor,619.6065263016447,0.9745228023223316,0.974540485565597,,,,,,1.8923795223236084
+Gradient Boosting Regressor,GradientBoostingRegressor,,from sklearn.ensemble import GradientBoostingRegressor,832.0544189659149,0.9540565977792264,0.9540623909803705,,,,,,3.1757211685180664
+XGBoost Regressor,XGBRegressor,,from xgboost import XGBRegressor,589.7202835468678,0.9769212745299692,0.9769258713300423,,,,,,0.1407914161682129
+Lasso Regression,Lasso,StandardScaler,from sklearn.linear_model import Lasso,1117.4411852989508,0.9171354000985334,0.9182819983838849,,,,,,3.079521656036377
+Ridge Regression,Ridge,StandardScaler,from sklearn.linear_model import Ridge,1119.4286929503212,0.9168403680326491,0.9179869663180006,,,,,,0.013668060302734375
+Elastic Net Regression,ElasticNet,StandardScaler,from sklearn.linear_model import ElasticNet,1538.5703984527142,0.8429078676662694,0.8440544659516207,,,,,,0.08864593505859375
+Support Vector Machine Regressor,SVR,StandardScaler,from sklearn.svm import SVR,3102.7905802633945,0.36111216575309824,0.4428966124521553,,,,,,52.48037528991699

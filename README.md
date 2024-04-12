@@ -41,5 +41,15 @@ For testing and personal usage, visit the provided [link](https://mlassistant.st
     ├── requirements.txt
     └── SQL.log
 ```
+## :zap: Contributions
+We welcome contributions from the community! Whether it's bug fixes, new features, or enhancements, feel free to submit pull requests or open issues on GitHub.
+
+## :sparkles: Future Roadmap
+I would like to keep building this app to include non supervised learning, deeper model tuning and deeper AI integration.
+
+## :mailbox: Contact Us
+
+If you find this project wrothy of you interest or you owuld like to contact me for any other reason. Please feel invited to do so at [rjcolgut@gmail.com](rjcolgut@gmail.com)
+
 ## License
 [License](LICENSE.txt)

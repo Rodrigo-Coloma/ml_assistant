@@ -126,11 +126,12 @@ def load_project(project_name,user):
                                                 pr.Approach AS approach,
                                                 Project AS project,
                                                 pr.CreatedAt AS created_at
-                                             FROM tested_models tm JOIN projects pr
+                                             FROM tested_models tm LEFT JOIN projects pr
                                                 ON tm.Project = pr.ProjectName
+                                                AND tm.Owner = pr.Owner
                                              WHERE tm.Owner = '{st.session_state.username}'
                                                 AND tm.Project = '{project_name}';''',
-                                            st.session_state.connection)
+                                            st.session_state.connection).drop_duplicates(subset=['name'])
     try:
         os.mkdir(f'./users/{user}/{project_name}')
     except:
@@ -739,8 +740,12 @@ if st.session_state.step == 'Model Selection':
                 with st.spinner('Please wait while the models are being tested'):
                     model_testing(st.session_state.data,st.session_state.target, st.session_state.approach, st.session_state.models)
         if "models" in st.session_state:
-            if st.checkbox('Show recommended models', value=True):    
-                st.dataframe(st.session_state.models)
+            if st.checkbox('Show recommended models', value=True):
+                if st.session_state.approach == 'regressor':
+                    columns_to_show = ['model', 'scaler', 'rmse', 'r2_score', 'explained_variance', 'training_time'] 
+                elif st.session_state.approach == 'classifier':
+                    columns_to_show = ['model', 'scaler', 'AUC', 'accuracy', 'recall', 'precission', 'f1',  'training time'] 
+                st.dataframe(st.session_state.models[columns_to_show])
 
 # Gridsearch
 if st.session_state.step == "Model Testing" and "models" in st.session_state:
